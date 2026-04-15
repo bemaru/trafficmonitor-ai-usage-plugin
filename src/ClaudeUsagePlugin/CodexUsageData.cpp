@@ -455,16 +455,16 @@ bool LoadMetricFromRateLimitsSection(const std::string& section_json, const char
     metric.available = true;
     metric.percentage = used_percent;
 
-    long long resets_at{};
-    if (TryGetJsonInt64(metric_json, "resets_at", resets_at))
+    long long reset_at{};
+    if (TryGetJsonInt64(metric_json, "reset_at", reset_at) || TryGetJsonInt64(metric_json, "resets_at", reset_at))
     {
         metric.has_reset_time = true;
-        metric.reset_at_unix_seconds = resets_at;
+        metric.reset_at_unix_seconds = reset_at;
         std::wstring reset_text;
-        if (UnixSecondsToLocalText(resets_at, reset_text))
+        if (UnixSecondsToLocalText(reset_at, reset_text))
             metric.reset_time_text = reset_text;
         else
-            metric.reset_time_text = std::to_wstring(resets_at);
+            metric.reset_time_text = std::to_wstring(reset_at);
     }
 
     return true;
