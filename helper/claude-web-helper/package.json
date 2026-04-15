@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Claude web session helper for trafficmonitor-ai-usage-plugin",
+  "description": "Claude web session helper for ClaudeUsagePlugin",
   "scripts": {
     "login": "node index.mjs login",
     "once": "node index.mjs once",

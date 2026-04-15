@@ -1,6 +1,6 @@
 # ClaudeUsagePlugin
 
-Private standalone repository for `trafficmonitor-ai-usage-plugin`, used to build and ship `ClaudeUsagePlugin.dll` for [TrafficMonitor](https://github.com/zhongyang219/TrafficMonitor).
+Private standalone repository for the `ClaudeUsagePlugin.dll` TrafficMonitor plug-in.
 It shows Claude and Codex account usage in the Windows taskbar.
 
 Versioning and release notes are tracked in [CHANGELOG.md](CHANGELOG.md).

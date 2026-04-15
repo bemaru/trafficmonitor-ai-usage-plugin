@@ -752,7 +752,7 @@ bool FetchUsageApiJson(const std::wstring& access_token, std::wstring& response_
     HINTERNET connection{};
     HINTERNET request{};
 
-    session = WinHttpOpen(L"TrafficMonitor_ClaudeUsagePlugin/0.3.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    session = WinHttpOpen(L"TrafficMonitor_ClaudeUsagePlugin/0.3.8", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (session == nullptr)
         return false;
 
