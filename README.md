@@ -32,6 +32,15 @@ Codex usage:
 - Falls back to `%USERPROFILE%\.codex\sessions\**\*.jsonl`
 - Respects `CODEX_HOME` when set, including WSL-style `/mnt/c/...` paths pointing back to Windows
 
+`CODEX_HOME` notes:
+
+- If `CODEX_HOME` is not set, the plugin uses `%USERPROFILE%\.codex`
+- Set `CODEX_HOME` if your Codex state lives somewhere else
+- Windows path example: `C:\Users\<user>\.codex`
+- WSL path example: `/mnt/c/Users/<user>/.codex`
+- The plugin runs on Windows, so `CODEX_HOME` must resolve to a Windows-accessible location
+- A Linux-only path such as `/home/<user>/.codex` will not be readable from TrafficMonitor on Windows
+
 Refresh behavior:
 
 - Claude success refresh: 60 seconds
@@ -110,3 +119,6 @@ This repo only ships the plugin DLL. It does not bundle TrafficMonitor itself.
 
 - `Codex sessions JSONL returned no rate limits`:
   Codex local session logs were found, but no rate-limit payload was present yet.
+
+- Codex usage does not appear:
+  Verify that `CODEX_HOME` points to the Codex store actually being written by your Windows or WSL session, and that the resolved path is readable from Windows.
