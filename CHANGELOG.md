@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.3.5 - 2026-04-15
+
+### Changed
+- Shifted the `7d` bars further toward muted gray-blue and gray-green tones so they remain visibly secondary to `5h` in the compact taskbar UI.
+
 ## 0.3.4 - 2026-04-15
 
 ### Changed
