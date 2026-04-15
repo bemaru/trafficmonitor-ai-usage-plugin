@@ -2,6 +2,8 @@
 
 Private standalone repository for building the `ClaudeUsagePlugin.dll` plugin for [TrafficMonitor](https://github.com/zhongyang219/TrafficMonitor).
 
+Versioning and release notes are tracked in [CHANGELOG.md](/D:/jhkwak/repos/bemaru/trafficmonitor-claude-usage-plugin/CHANGELOG.md).
+
 ## Scope
 
 - Claude account usage only
@@ -65,6 +67,11 @@ This repo only ships the plugin DLL. It does not bundle TrafficMonitor itself.
 - This depends on Anthropic keeping the current usage endpoint and response shape compatible.
 - This is best-effort integration, not an official Anthropic integration surface.
 - This repository is intended to remain private for now.
+
+## Tested compatibility
+
+- TrafficMonitor plugin API v7
+- Visual Studio 2022 / MSVC v143
 
 ## Troubleshooting
 
