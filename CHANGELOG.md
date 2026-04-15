@@ -6,6 +6,7 @@
 - Claude usage now uses only the plugin's own cached API snapshot as the Claude fallback source.
 - Claude now prefers an official Claude Code statusline bridge cache when configured, with the OAuth usage endpoint retained as fallback.
 - Claude local cache and statusline bridge files now live under `trafficmonitor-claude-usage-plugin`, with backward-compatible reads from the previous `trafficmonitor-ai-usage-plugin` path.
+- Added a WSL Claude Code statusline wrapper path so WSL sessions can write the Windows-readable Claude bridge cache directly.
 
 ### Fixed
 - Claude usage polling now respects `Retry-After` when the Anthropic usage API returns `429 rate limited`, instead of retrying every 5 seconds.

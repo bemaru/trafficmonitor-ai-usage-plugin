@@ -90,6 +90,8 @@ This repo only ships the plugin DLL. It does not bundle TrafficMonitor itself.
 
 If you use Claude Code on the same Windows account, the preferred Claude source is the official statusline `rate_limits` payload. This avoids relying on the undocumented OAuth usage endpoint during active Claude Code sessions.
 
+Windows-native Claude Code:
+
 1. Copy `scripts\claude-statusline-wrapper.ps1` to `%USERPROFILE%\.claude\trafficmonitor-statusline-wrapper.ps1`.
 2. Update `%USERPROFILE%\.claude\settings.json`:
 
@@ -109,6 +111,25 @@ This wrapper:
 - Writes `rate_limits` to `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-statusline.json`
 - Forwards the same stdin payload to `bunx -y ccstatusline@latest`, so the existing `ccstatusline` output keeps working
 - The bridge becomes usable only after Claude Code has produced at least one response with `rate_limits`; until then the plugin falls back to the OAuth usage API
+
+WSL Claude Code:
+
+1. Copy `scripts/claude-statusline-wrapper.sh` to `~/.claude/trafficmonitor-statusline-wrapper.sh`.
+2. Make it executable: `chmod +x ~/.claude/trafficmonitor-statusline-wrapper.sh`
+3. Update `~/.claude/settings.json`:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/trafficmonitor-statusline-wrapper.sh",
+    "padding": 0,
+    "refreshInterval": 5
+  }
+}
+```
+
+The WSL wrapper writes the cache into the Windows-readable `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin` path through `/mnt/c/...`, then forwards stdin to `npx -y ccstatusline@2.2.7`.
 
 ## Constraints
 
