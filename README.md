@@ -113,8 +113,14 @@ The helper writes `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-
 
 ## What the plugin shows
 
-- `C5h`: current 5-hour usage percentage
-- `C7d`: current 7-day usage percentage
+- Prefix legend:
+  - `C` = Claude
+  - `X` = Codex
+- Window legend:
+  - `5h` = current 5-hour usage window
+  - `7d` = current 7-day usage window
+- `C5h`: current Claude 5-hour usage percentage
+- `C7d`: current Claude 7-day usage percentage
 - `X5h`: current Codex 5-hour usage percentage
 - `X7d`: current Codex 7-day usage percentage
 
