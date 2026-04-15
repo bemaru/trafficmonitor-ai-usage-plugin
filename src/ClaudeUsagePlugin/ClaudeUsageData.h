@@ -24,14 +24,6 @@ public:
 public:
     static CClaudeUsageData& Instance();
 
-    void RefreshIfNeeded();
-    const std::wstring& GetValueText(ClaudeUsageWindow window) const;
-    const Metric& GetMetric(ClaudeUsageWindow window) const;
-    const std::wstring& GetTooltipText() const;
-
-private:
-    CClaudeUsageData() = default;
-
     struct Snapshot
     {
         Metric rolling_5h;
@@ -40,7 +32,16 @@ private:
         std::wstring value_7d_text{ L"--" };
         std::wstring tooltip_text{ L"Claude account usage unavailable" };
         std::wstring error_text;
+        std::wstring source_text{ L"Claude OAuth usage API" };
     };
+
+    void RefreshIfNeeded();
+    const std::wstring& GetValueText(ClaudeUsageWindow window) const;
+    const Metric& GetMetric(ClaudeUsageWindow window) const;
+    const std::wstring& GetTooltipText() const;
+
+private:
+    CClaudeUsageData() = default;
 
     bool Refresh(unsigned long long& retry_after_ms);
     static bool LoadFromUsageApi(Snapshot& snapshot, unsigned long long& retry_after_ms);

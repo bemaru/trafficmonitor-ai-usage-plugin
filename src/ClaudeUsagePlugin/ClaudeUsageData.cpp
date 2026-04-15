@@ -3,23 +3,29 @@
 
 #include <winhttp.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cwctype>
 #include <string>
+#include <vector>
 
 namespace
 {
 #pragma comment(lib, "winhttp.lib")
 
-constexpr unsigned long long REFRESH_INTERVAL_MS = 60ULL * 1000ULL;
-constexpr unsigned long long RETRY_INTERVAL_MS = 5ULL * 1000ULL;
+constexpr unsigned long long REFRESH_INTERVAL_MS = 180ULL * 1000ULL;
+constexpr unsigned long long RETRY_INTERVAL_MS = 30ULL * 1000ULL;
 constexpr unsigned long long RATE_LIMIT_RETRY_FALLBACK_MS = 5ULL * 60ULL * 1000ULL;
 constexpr unsigned long long MAX_RETRY_AFTER_MS = 12ULL * 60ULL * 60ULL * 1000ULL;
+constexpr unsigned long long CACHE_MAX_AGE_MS = 180ULL * 1000ULL;
 constexpr unsigned long long MAX_JSON_FILE_SIZE = 1024ULL * 1024ULL;
 constexpr wchar_t USAGE_API_HOST[] = L"api.anthropic.com";
 constexpr wchar_t USAGE_API_PATH[] = L"/api/oauth/usage";
 constexpr wchar_t USAGE_API_BETA_HEADER[] = L"oauth-2025-04-20";
+constexpr wchar_t PLUGIN_CACHE_DIR_NAME[] = L"trafficmonitor-ai-usage-plugin";
+constexpr wchar_t PLUGIN_CACHE_FILE_NAME[] = L"claude-usage.json";
+constexpr wchar_t CCSTATUSLINE_CACHE_RELATIVE_PATH[] = L".cache\\ccstatusline\\usage.json";
 
 std::wstring GetEnvVar(const wchar_t* name)
 {
@@ -52,6 +58,120 @@ std::wstring JoinPath(const std::wstring& left, const std::wstring& right)
     if (left.back() == L'\\' || left.back() == L'/')
         return left + right;
     return left + L'\\' + right;
+}
+
+struct UsageCacheCandidate
+{
+    std::wstring path;
+    std::wstring source_text;
+    unsigned long long last_write_time_ms{};
+};
+
+std::wstring GetPluginCacheDir()
+{
+    const std::wstring local_app_data = TrimString(GetEnvVar(L"LOCALAPPDATA"));
+    if (!local_app_data.empty())
+        return JoinPath(local_app_data, PLUGIN_CACHE_DIR_NAME);
+
+    const std::wstring home = TrimString(GetEnvVar(L"USERPROFILE"));
+    if (home.empty())
+        return std::wstring();
+
+    return JoinPath(JoinPath(home, L".cache"), PLUGIN_CACHE_DIR_NAME);
+}
+
+std::wstring GetPluginCachePath()
+{
+    const std::wstring cache_dir = GetPluginCacheDir();
+    if (cache_dir.empty())
+        return std::wstring();
+    return JoinPath(cache_dir, PLUGIN_CACHE_FILE_NAME);
+}
+
+std::wstring GetCcStatuslineCachePath()
+{
+    const std::wstring home = TrimString(GetEnvVar(L"USERPROFILE"));
+    if (home.empty())
+        return std::wstring();
+    return JoinPath(home, CCSTATUSLINE_CACHE_RELATIVE_PATH);
+}
+
+bool FileExists(const std::wstring& path)
+{
+    const DWORD attributes = GetFileAttributesW(path.c_str());
+    return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
+}
+
+bool EnsureDirectoryExists(const std::wstring& path)
+{
+    if (path.empty())
+        return false;
+
+    DWORD attributes = GetFileAttributesW(path.c_str());
+    if (attributes != INVALID_FILE_ATTRIBUTES)
+        return (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+
+    size_t start = 0;
+    if (path.size() >= 2 && path[1] == L':')
+        start = 3;
+    else if (path.size() >= 2 && path[0] == L'\\' && path[1] == L'\\')
+    {
+        const size_t first_sep = path.find(L'\\', 2);
+        if (first_sep == std::wstring::npos)
+            return false;
+        const size_t second_sep = path.find(L'\\', first_sep + 1);
+        if (second_sep == std::wstring::npos)
+            return false;
+        start = second_sep + 1;
+    }
+
+    for (size_t index = start; index <= path.size(); ++index)
+    {
+        if (index != path.size() && path[index] != L'\\' && path[index] != L'/')
+            continue;
+
+        const std::wstring segment = path.substr(0, index);
+        if (segment.empty())
+            continue;
+
+        attributes = GetFileAttributesW(segment.c_str());
+        if (attributes != INVALID_FILE_ATTRIBUTES)
+        {
+            if ((attributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
+                return false;
+            continue;
+        }
+
+        if (!CreateDirectoryW(segment.c_str(), nullptr) && GetLastError() != ERROR_ALREADY_EXISTS)
+            return false;
+    }
+
+    return true;
+}
+
+bool GetCurrentTimeMs(unsigned long long& current_time_ms)
+{
+    FILETIME file_time{};
+    GetSystemTimeAsFileTime(&file_time);
+
+    ULARGE_INTEGER value{};
+    value.LowPart = file_time.dwLowDateTime;
+    value.HighPart = file_time.dwHighDateTime;
+    current_time_ms = value.QuadPart / 10000ULL;
+    return true;
+}
+
+bool GetFileLastWriteTimeMs(const std::wstring& path, unsigned long long& last_write_time_ms)
+{
+    WIN32_FILE_ATTRIBUTE_DATA attributes{};
+    if (!GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &attributes))
+        return false;
+
+    ULARGE_INTEGER value{};
+    value.LowPart = attributes.ftLastWriteTime.dwLowDateTime;
+    value.HighPart = attributes.ftLastWriteTime.dwHighDateTime;
+    last_write_time_ms = value.QuadPart / 10000ULL;
+    return true;
 }
 
 std::wstring GetClaudeConfigDir()
@@ -117,6 +237,37 @@ bool ReadUtf8File(const std::wstring& path, std::wstring& output)
     output.assign(wide_size, L'\0');
     MultiByteToWideChar(CP_UTF8, 0, bytes.data(), static_cast<int>(bytes.size()), output.empty() ? nullptr : &output[0], wide_size);
     return true;
+}
+
+bool WriteUtf8File(const std::wstring& path, const std::wstring& content)
+{
+    const size_t separator_pos = path.find_last_of(L"\\/");
+    if (separator_pos != std::wstring::npos)
+    {
+        if (!EnsureDirectoryExists(path.substr(0, separator_pos)))
+            return false;
+    }
+
+    const int utf8_size = WideCharToMultiByte(CP_UTF8, 0, content.c_str(), static_cast<int>(content.size()), nullptr, 0, nullptr, nullptr);
+    if (utf8_size < 0)
+        return false;
+
+    std::string utf8(static_cast<size_t>(utf8_size), '\0');
+    if (utf8_size > 0)
+    {
+        WideCharToMultiByte(CP_UTF8, 0, content.c_str(), static_cast<int>(content.size()), &utf8[0], utf8_size, nullptr, nullptr);
+    }
+
+    FILE* file{};
+    if (_wfopen_s(&file, path.c_str(), L"wb") != 0 || file == nullptr)
+        return false;
+
+    bool success = true;
+    if (!utf8.empty())
+        success = fwrite(utf8.data(), 1, utf8.size(), file) == utf8.size();
+
+    fclose(file);
+    return success;
 }
 
 bool FindJsonKey(const std::wstring& json, const wchar_t* key, size_t& value_pos)
@@ -520,7 +671,14 @@ bool LoadAccessToken(std::wstring& access_token)
     if (!ReadUtf8File(JoinPath(config_dir, L".credentials.json"), credentials_json))
         return false;
 
-    return TryGetJsonString(credentials_json, L"accessToken", access_token) && !access_token.empty();
+    if (TryGetJsonString(credentials_json, L"accessToken", access_token) && !access_token.empty())
+        return true;
+
+    std::wstring oauth_json;
+    if (!TryGetJsonObject(credentials_json, L"claudeAiOauth", oauth_json))
+        return false;
+
+    return TryGetJsonString(oauth_json, L"accessToken", access_token) && !access_token.empty();
 }
 
 bool FetchUsageApiJson(const std::wstring& access_token, std::wstring& response_body, DWORD& status_code, unsigned long long& retry_after_ms)
@@ -630,6 +788,24 @@ bool FetchUsageApiJson(const std::wstring& access_token, std::wstring& response_
     return succeed;
 }
 
+void ApplyResetAtValue(const std::wstring& reset_at, CClaudeUsageData::Metric& metric)
+{
+    if (reset_at.empty())
+        return;
+
+    FILETIME reset_file_time{};
+    if (TryParseUtcIso8601(reset_at, reset_file_time))
+    {
+        metric.has_reset_time = FileTimeToUnixSeconds(reset_file_time, metric.reset_at_unix_seconds);
+        if (!FileTimeToLocalText(reset_file_time, metric.reset_time_text))
+            metric.reset_time_text = reset_at;
+    }
+    else
+    {
+        metric.reset_time_text = reset_at;
+    }
+}
+
 bool LoadMetricFromApiSection(const std::wstring& response_json, const wchar_t* section_name, CClaudeUsageData::Metric& metric)
 {
     std::wstring section_json;
@@ -645,21 +821,105 @@ bool LoadMetricFromApiSection(const std::wstring& response_json, const wchar_t* 
 
     std::wstring resets_at;
     if (TryGetJsonString(section_json, L"resets_at", resets_at))
-    {
-        FILETIME reset_file_time{};
-        if (TryParseUtcIso8601(resets_at, reset_file_time))
-        {
-            metric.has_reset_time = FileTimeToUnixSeconds(reset_file_time, metric.reset_at_unix_seconds);
-            if (!FileTimeToLocalText(reset_file_time, metric.reset_time_text))
-                metric.reset_time_text = resets_at;
-        }
-        else
-        {
-            metric.reset_time_text = resets_at;
-        }
-    }
+        ApplyResetAtValue(resets_at, metric);
 
     return true;
+}
+
+bool LoadMetricFromCacheFields(const std::wstring& json, const wchar_t* usage_key, const wchar_t* reset_key, CClaudeUsageData::Metric& metric)
+{
+    double usage{};
+    if (!TryGetJsonDouble(json, usage_key, usage))
+        return false;
+
+    metric.available = true;
+    metric.percentage = usage;
+
+    std::wstring resets_at;
+    if (TryGetJsonString(json, reset_key, resets_at))
+        ApplyResetAtValue(resets_at, metric);
+
+    return true;
+}
+
+bool LoadSnapshotFromCachedJson(const std::wstring& json, CClaudeUsageData::Snapshot& snapshot)
+{
+    const bool has_api_5h = LoadMetricFromApiSection(json, L"five_hour", snapshot.rolling_5h);
+    const bool has_api_7d = LoadMetricFromApiSection(json, L"seven_day", snapshot.rolling_7d);
+    if (has_api_5h || has_api_7d)
+        return true;
+
+    const bool has_cache_5h = LoadMetricFromCacheFields(json, L"sessionUsage", L"sessionResetAt", snapshot.rolling_5h);
+    const bool has_cache_7d = LoadMetricFromCacheFields(json, L"weeklyUsage", L"weeklyResetAt", snapshot.rolling_7d);
+    return has_cache_5h || has_cache_7d;
+}
+
+bool TryLoadCachedUsageSnapshot(CClaudeUsageData::Snapshot& snapshot, bool require_fresh_cache)
+{
+    std::vector<UsageCacheCandidate> candidates;
+
+    const std::wstring plugin_cache_path = GetPluginCachePath();
+    if (!plugin_cache_path.empty() && FileExists(plugin_cache_path))
+    {
+        unsigned long long last_write_time_ms{};
+        if (GetFileLastWriteTimeMs(plugin_cache_path, last_write_time_ms))
+            candidates.push_back(UsageCacheCandidate{ plugin_cache_path, L"Claude usage cache", last_write_time_ms });
+    }
+
+    const std::wstring ccstatusline_cache_path = GetCcStatuslineCachePath();
+    if (!ccstatusline_cache_path.empty() && FileExists(ccstatusline_cache_path))
+    {
+        unsigned long long last_write_time_ms{};
+        if (GetFileLastWriteTimeMs(ccstatusline_cache_path, last_write_time_ms))
+            candidates.push_back(UsageCacheCandidate{ ccstatusline_cache_path, L"ccstatusline cache", last_write_time_ms });
+    }
+
+    if (candidates.empty())
+        return false;
+
+    const unsigned long long now_ms = []() {
+        unsigned long long value{};
+        GetCurrentTimeMs(value);
+        return value;
+    }();
+
+    std::sort(
+        candidates.begin(),
+        candidates.end(),
+        [](const UsageCacheCandidate& left, const UsageCacheCandidate& right)
+        {
+            return left.last_write_time_ms > right.last_write_time_ms;
+        });
+
+    for (const UsageCacheCandidate& candidate : candidates)
+    {
+        if (require_fresh_cache && now_ms >= candidate.last_write_time_ms && now_ms - candidate.last_write_time_ms > CACHE_MAX_AGE_MS)
+            continue;
+
+        std::wstring cached_json;
+        if (!ReadUtf8File(candidate.path, cached_json))
+            continue;
+
+        CClaudeUsageData::Snapshot cached_snapshot;
+        if (!LoadSnapshotFromCachedJson(cached_json, cached_snapshot))
+            continue;
+
+        snapshot.rolling_5h = cached_snapshot.rolling_5h;
+        snapshot.rolling_7d = cached_snapshot.rolling_7d;
+        snapshot.source_text = candidate.source_text;
+        return true;
+    }
+
+    return false;
+}
+
+void WriteUsageCache(const std::wstring& response_json)
+{
+    const std::wstring cache_path = GetPluginCachePath();
+    if (cache_path.empty())
+        return;
+
+    WriteUtf8File(cache_path, response_json);
 }
 }
 
@@ -740,10 +1000,19 @@ bool CClaudeUsageData::Refresh(unsigned long long& retry_after_ms)
 bool CClaudeUsageData::LoadFromUsageApi(Snapshot& snapshot, unsigned long long& retry_after_ms)
 {
     retry_after_ms = 0;
+
+    if (TryLoadCachedUsageSnapshot(snapshot, true))
+        return true;
+
     std::wstring access_token;
     if (!LoadAccessToken(access_token))
     {
         snapshot.error_text = L"Claude access token not found";
+        if (TryLoadCachedUsageSnapshot(snapshot, false))
+        {
+            snapshot.error_text += L"; showing cached values";
+            return true;
+        }
         return false;
     }
 
@@ -752,12 +1021,22 @@ bool CClaudeUsageData::LoadFromUsageApi(Snapshot& snapshot, unsigned long long& 
     if (!FetchUsageApiJson(access_token, response_json, status_code, retry_after_ms))
     {
         snapshot.error_text = L"Claude usage API request failed";
+        if (TryLoadCachedUsageSnapshot(snapshot, false))
+        {
+            snapshot.error_text += L"; showing cached values";
+            return true;
+        }
         return false;
     }
 
     if (status_code == HTTP_STATUS_DENIED || status_code == HTTP_STATUS_FORBIDDEN)
     {
         snapshot.error_text = L"Claude login required";
+        if (TryLoadCachedUsageSnapshot(snapshot, false))
+        {
+            snapshot.error_text += L"; showing cached values";
+            return true;
+        }
         return false;
     }
     if (status_code == 429)
@@ -771,12 +1050,22 @@ bool CClaudeUsageData::LoadFromUsageApi(Snapshot& snapshot, unsigned long long& 
         snapshot.error_text += L" (retry in ";
         snapshot.error_text += FormatDurationFromSeconds((retry_after_ms + 999ULL) / 1000ULL);
         snapshot.error_text += L")";
+        if (TryLoadCachedUsageSnapshot(snapshot, false))
+        {
+            snapshot.error_text += L"; showing cached values";
+            return true;
+        }
         return false;
     }
     if (status_code != HTTP_STATUS_OK)
     {
         snapshot.error_text = L"Claude usage API HTTP ";
         snapshot.error_text += std::to_wstring(status_code);
+        if (TryLoadCachedUsageSnapshot(snapshot, false))
+        {
+            snapshot.error_text += L"; showing cached values";
+            return true;
+        }
         return false;
     }
 
@@ -785,9 +1074,16 @@ bool CClaudeUsageData::LoadFromUsageApi(Snapshot& snapshot, unsigned long long& 
     if (!has_five_hour && !has_seven_day)
     {
         snapshot.error_text = L"Claude usage API returned unexpected data";
+        if (TryLoadCachedUsageSnapshot(snapshot, false))
+        {
+            snapshot.error_text += L"; showing cached values";
+            return true;
+        }
         return false;
     }
 
+    snapshot.source_text = L"Claude OAuth usage API";
+    WriteUsageCache(response_json);
     return true;
 }
 
@@ -812,7 +1108,16 @@ void CClaudeUsageData::FinalizeSnapshot(Snapshot& snapshot)
     snapshot.tooltip_text += BuildMetricTooltip(L"5h", snapshot.rolling_5h);
     snapshot.tooltip_text += L"\n";
     snapshot.tooltip_text += BuildMetricTooltip(L"7d", snapshot.rolling_7d);
-    snapshot.tooltip_text += L"\nSource: Claude OAuth usage API";
+    if (!snapshot.error_text.empty())
+    {
+        snapshot.tooltip_text += L"\n";
+        snapshot.tooltip_text += snapshot.error_text;
+    }
+    if (!snapshot.source_text.empty())
+    {
+        snapshot.tooltip_text += L"\nSource: ";
+        snapshot.tooltip_text += snapshot.source_text;
+    }
 }
 
 bool CClaudeUsageData::HasAvailableMetric(const Snapshot& snapshot)

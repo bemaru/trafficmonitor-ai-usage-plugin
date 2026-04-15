@@ -7,7 +7,7 @@ Versioning and release notes are tracked in [CHANGELOG.md](CHANGELOG.md).
 ## Scope
 
 - Claude and Codex account usage
-- If refresh fails, the plugin falls back to `unavailable` instead of keeping stale values
+- Claude prefers live API data, but can fall back to cached usage data when the API is temporarily unavailable or rate-limited
 
 ## What the plugin shows
 
@@ -25,6 +25,9 @@ Claude usage:
 - Reads the local Claude OAuth access token from `%USERPROFILE%\.claude\.credentials.json`
 - Or from `CLAUDE_CONFIG_DIR\.credentials.json` if `CLAUDE_CONFIG_DIR` is set
 - Sends a read-only request to `https://api.anthropic.com/api/oauth/usage`
+- Caches successful Claude usage responses locally and reuses them for a short period
+- If the API is rate-limited or temporarily unavailable, the plugin can fall back to the most recent cached usage snapshot
+- If `ccstatusline` cache exists at `%USERPROFILE%\.cache\ccstatusline\usage.json`, the plugin can use that as an additional Claude fallback source
 
 Codex usage:
 
@@ -43,8 +46,8 @@ Codex usage:
 
 Refresh behavior:
 
-- Claude success refresh: 60 seconds
-- Claude other failure retry: 5 seconds
+- Claude success refresh / fresh-cache TTL: 180 seconds
+- Claude other failure retry: 30 seconds
 - Claude rate limit retry: respects `Retry-After` when present, otherwise falls back to 5 minutes
 - Codex success refresh: 60 seconds
 - Codex failure retry: 5 seconds
@@ -85,6 +88,7 @@ This repo only ships the plugin DLL. It does not bundle TrafficMonitor itself.
 
 - This depends on Claude's local credential file layout.
 - This depends on Anthropic keeping the current usage endpoint and response shape compatible.
+- Claude cached fallback values can be stale when the live API is unavailable.
 - Codex usage currently comes from local Codex state, not an official OpenAI usage API.
 - Codex values update only after Codex itself writes fresh rate-limit data locally.
 - This is best-effort integration, not an official Anthropic integration surface.
@@ -104,13 +108,13 @@ This repo only ships the plugin DLL. It does not bundle TrafficMonitor itself.
   The token is expired or no longer accepted by the API.
 
 - `Claude usage API rate limited`:
-  The endpoint rejected requests temporarily.
+  The endpoint rejected requests temporarily. The plugin will wait until `Retry-After` and may show cached Claude values if available.
 
 - `Claude usage API returned unexpected data`:
   The response schema changed and the plugin needs an update.
 
 - `Claude usage API request failed`:
-  Network, TLS, or endpoint reachability failed.
+  Network, TLS, or endpoint reachability failed. Cached Claude values may still be shown if a usable cache exists.
 
 - `Codex config directory not found`:
   `CODEX_HOME` or `%USERPROFILE%\.codex` could not be resolved.
