@@ -75,9 +75,20 @@ DrawColors GetCodexDrawColors(CodexUsageWindow window, bool dark_mode)
         : DrawColors{ RGB(74, 176, 114), RGB(229, 246, 236), RGB(179, 210, 190), RGB(54, 62, 76) };
 }
 
-void DrawUsageItemBar(CDC* pDC, const DrawColors& colors, const wchar_t* label_text, const wchar_t* value_text, bool available, float ratio, int x, int y, int w, int h)
+void DrawUsageItemBar(
+    CDC* pDC,
+    const DrawColors& colors,
+    const wchar_t* label_text,
+    const wchar_t* value_text,
+    const wchar_t* value_sample_text,
+    bool available,
+    float ratio,
+    int x,
+    int y,
+    int w,
+    int h)
 {
-    if (pDC == nullptr || label_text == nullptr || value_text == nullptr || w <= 0 || h <= 0)
+    if (pDC == nullptr || label_text == nullptr || value_text == nullptr || value_sample_text == nullptr || w <= 0 || h <= 0)
         return;
 
     const int padding = 4;
@@ -87,7 +98,7 @@ void DrawUsageItemBar(CDC* pDC, const DrawColors& colors, const wchar_t* label_t
     const int bar_height = (h >= 16 ? 6 : 4);
 
     const int label_width = MeasureTextWidth(pDC, label_text);
-    const int value_width = MeasureTextWidth(pDC, value_text);
+    const int value_width = max(MeasureTextWidth(pDC, value_text), MeasureTextWidth(pDC, value_sample_text));
 
     CRect rect(x, y, x + w, y + h);
     CRect accent_rect(rect.left + padding, rect.top + 2, rect.left + padding + accent_width, rect.bottom - 2);
@@ -207,7 +218,7 @@ void CClaudeUsageItem::DrawItem(void* hDC, int x, int y, int w, int h, bool dark
     const DrawColors colors = GetDrawColors(m_window, dark_mode);
     const CClaudeUsageData::Metric metric = g_claude_usage_data.GetMetric(m_window);
     const std::wstring value_text = g_claude_usage_data.GetValueText(m_window);
-    DrawUsageItemBar(pDC, colors, GetItemLableText(), value_text.c_str(), metric.available, GetUsageRatio(metric), x, y, w, h);
+    DrawUsageItemBar(pDC, colors, GetItemLableText(), value_text.c_str(), GetItemValueSampleText(), metric.available, GetUsageRatio(metric), x, y, w, h);
 }
 
 CCodexUsageItem::CCodexUsageItem(CodexUsageWindow window)
@@ -274,7 +285,7 @@ void CCodexUsageItem::DrawItem(void* hDC, int x, int y, int w, int h, bool dark_
     const DrawColors colors = GetCodexDrawColors(m_window, dark_mode);
     const CCodexUsageData::Metric metric = g_codex_usage_data.GetMetric(m_window);
     const std::wstring value_text = g_codex_usage_data.GetValueText(m_window);
-    DrawUsageItemBar(pDC, colors, GetItemLableText(), value_text.c_str(), metric.available, GetUsageRatio(metric), x, y, w, h);
+    DrawUsageItemBar(pDC, colors, GetItemLableText(), value_text.c_str(), GetItemValueSampleText(), metric.available, GetUsageRatio(metric), x, y, w, h);
 }
 
 CClaudeUsagePlugin& CClaudeUsagePlugin::Instance()

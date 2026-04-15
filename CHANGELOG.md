@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.3.2 - 2026-04-15
+
+### Fixed
+- Usage bar width now reserves a fixed value-text area, so bar length no longer changes with `9%` vs `10%` style digit-count differences.
+
 ## 0.3.1 - 2026-04-15
 
 ### Changed
