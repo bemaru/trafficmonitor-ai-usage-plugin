@@ -985,6 +985,7 @@ void CClaudeUsageData::RefreshIfNeeded()
     const unsigned long long started_at = GetTickCount64();
     const bool has_fresh_statusline_cache = HasFreshStatuslineCache();
     bool allow_api_request = true;
+    bool backoff_expired = false;
     {
         std::lock_guard<std::mutex> lock(m_state_mutex);
         if (m_refresh_in_progress)
@@ -1001,9 +1002,13 @@ void CClaudeUsageData::RefreshIfNeeded()
         }
         else
         {
-            const unsigned long long refresh_interval_ms = GetRefreshIntervalMs(m_last_refresh_succeeded);
-            if (m_last_refresh_tick != 0 && started_at - m_last_refresh_tick < refresh_interval_ms)
-                return;
+            backoff_expired = (m_next_refresh_tick != 0 && started_at >= m_next_refresh_tick);
+            if (!backoff_expired)
+            {
+                const unsigned long long refresh_interval_ms = GetRefreshIntervalMs(m_last_refresh_succeeded);
+                if (m_last_refresh_tick != 0 && started_at - m_last_refresh_tick < refresh_interval_ms)
+                    return;
+            }
         }
 
         m_refresh_in_progress = true;
@@ -1016,7 +1021,8 @@ void CClaudeUsageData::RefreshIfNeeded()
     {
         std::lock_guard<std::mutex> lock(m_state_mutex);
         m_last_refresh_tick = completed_at;
-        m_last_refresh_succeeded = succeeded;
+        if (allow_api_request)
+            m_last_refresh_succeeded = succeeded;
         if (allow_api_request)
             m_next_refresh_tick = (retry_after_ms == 0 ? 0 : completed_at + retry_after_ms);
         m_refresh_in_progress = false;
@@ -1075,7 +1081,7 @@ bool CClaudeUsageData::LoadFromUsageApi(Snapshot& snapshot, unsigned long long& 
         if (TryLoadCachedUsageSnapshot(snapshot, false))
         {
             snapshot.error_text += L"; showing cached values";
-            return true;
+            return false;
         }
         return false;
     }
@@ -1088,18 +1094,23 @@ bool CClaudeUsageData::LoadFromUsageApi(Snapshot& snapshot, unsigned long long& 
         if (TryLoadCachedUsageSnapshot(snapshot, false))
         {
             snapshot.error_text += L"; showing cached values";
-            return true;
+            return false;
         }
         return false;
     }
 
     if (status_code == HTTP_STATUS_DENIED || status_code == HTTP_STATUS_FORBIDDEN)
     {
-        snapshot.error_text = L"Claude login required";
+        snapshot.error_text = L"Claude usage API HTTP ";
+        snapshot.error_text += std::to_wstring(status_code);
+        if (status_code == HTTP_STATUS_DENIED)
+            snapshot.error_text += L" (login required)";
+        else
+            snapshot.error_text += L" (access denied)";
         if (TryLoadCachedUsageSnapshot(snapshot, false))
         {
             snapshot.error_text += L"; showing cached values";
-            return true;
+            return false;
         }
         return false;
     }
@@ -1110,14 +1121,14 @@ bool CClaudeUsageData::LoadFromUsageApi(Snapshot& snapshot, unsigned long long& 
         if (retry_after_ms > MAX_RETRY_AFTER_MS)
             retry_after_ms = MAX_RETRY_AFTER_MS;
 
-        snapshot.error_text = L"Claude usage API rate limited";
+        snapshot.error_text = L"Claude usage API HTTP 429 rate limited";
         snapshot.error_text += L" (retry in ";
         snapshot.error_text += FormatDurationFromSeconds((retry_after_ms + 999ULL) / 1000ULL);
         snapshot.error_text += L")";
         if (TryLoadCachedUsageSnapshot(snapshot, false))
         {
             snapshot.error_text += L"; showing cached values";
-            return true;
+            return false;
         }
         return false;
     }
@@ -1128,7 +1139,7 @@ bool CClaudeUsageData::LoadFromUsageApi(Snapshot& snapshot, unsigned long long& 
         if (TryLoadCachedUsageSnapshot(snapshot, false))
         {
             snapshot.error_text += L"; showing cached values";
-            return true;
+            return false;
         }
         return false;
     }
@@ -1141,7 +1152,7 @@ bool CClaudeUsageData::LoadFromUsageApi(Snapshot& snapshot, unsigned long long& 
         if (TryLoadCachedUsageSnapshot(snapshot, false))
         {
             snapshot.error_text += L"; showing cached values";
-            return true;
+            return false;
         }
         return false;
     }

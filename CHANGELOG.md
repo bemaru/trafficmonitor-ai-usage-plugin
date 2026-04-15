@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.3.7 - 2026-04-15
+
+### Changed
+- Claude tooltip errors now include the concrete HTTP status for denied and rate-limited API responses.
+
+### Fixed
+- Claude cached fallback responses no longer mark API failures as a successful refresh, so auth and rate-limit states recover on the shorter retry cadence.
+
 ## 0.3.6 - 2026-04-15
 
 ### Changed
