@@ -38,10 +38,14 @@ If you do not need TrafficMonitor's temperature monitoring features, the officia
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 login
-powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 start
 ```
 
 5. If your Codex data does not live in `%USERPROFILE%\.codex`, set `CODEX_HOME` in the Windows environment before launching TrafficMonitor.
+6. Start the helper background loop:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 start
+```
 
 After setup, the taskbar should show `C5h`, `C7d`, `X5h`, and `X7d`, and the tooltip should show reset timing when that source exposes it.
 
@@ -216,8 +220,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 login
 powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 start
 ```
 
-- Launches the background refresh loop in a hidden PowerShell window
-- Starts the normal `watch` mode without leaving a console window open on the desktop
+- Launches the normal background refresh loop as a hidden background process
+- This is the default way to keep Claude values fresh after the one-time login
 - If a watcher is already running, it prints the current watcher PID instead of starting a duplicate
 
 ```powershell
@@ -234,27 +238,18 @@ powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 stop
 - Stops the running helper watcher and cleans up a stale watch lock when possible
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 once
-```
-
-- Reads the saved Claude cookies from the helper browser profile
-- Calls `https://claude.ai/api/organizations/{lastActiveOrg}/usage` directly when `lastActiveOrg` is available
-- Updates `claude-web-usage.json` on success
-- Keeps the most recent helper snapshot only within the normal 90-second freshness window when transient helper fetch failures occur
-
-```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 watch
 ```
 
 - Repeats the cookie-based web fetch every 60 seconds in the foreground
-- Useful for troubleshooting; `start` is the normal background command
+- Useful for troubleshooting when you want to see each refresh attempt
 - Refuses duplicate `watch` processes; if one is already running, a second start exits after printing the existing watcher PID
 
 Operational notes:
 
 - `login` is the only interactive step. After that, `start` is the normal background mode.
-- `watch` is single-instance. Starting it again while one watcher is already running simply reports the existing watcher and exits.
-- Close the helper browser window before `once` or `watch`, otherwise the Chromium cookies database may stay locked.
+- `watch` is foreground troubleshooting mode. Use it only when you want console output for each refresh.
+- Close the helper browser window before `start` or `watch`, otherwise the Chromium cookies database may stay locked.
 - The helper reads the dedicated profile's `Local State` and `Cookies` database and decrypts them under the same Windows user account.
 - The helper uses only Node built-ins under `helper\claude-web-helper`; no separate Playwright install is required.
 - If helper auth expires, `claude-web-helper-status.json` will show the last failure state and Claude will become unavailable after the short helper freshness window expires.
@@ -304,7 +299,7 @@ After installation or setup, check the following:
   Run `powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 login` again and complete the Claude web login in the opened browser window.
 
 - Claude web helper status shows `profile_in_use`:
-  Close the helper browser window that was opened by `login`, then run `once` or `watch` again.
+  Close the helper browser window that was opened by `login`, then run `start` again. Use `watch` only if you want foreground troubleshooting output.
 
 - Claude web helper status shows `rate_limited` or `request_failed`:
   The helper could not fetch `claude.ai` usage right now. The plugin will keep using the recent helper snapshot only within the normal 90-second freshness window, then Claude will become unavailable.
