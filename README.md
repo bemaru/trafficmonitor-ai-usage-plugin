@@ -5,6 +5,22 @@ It shows Claude and Codex account usage in the Windows taskbar.
 
 Versioning and release notes are tracked in [CHANGELOG.md](CHANGELOG.md).
 
+## Getting Started
+
+1. Install the official TrafficMonitor release and choose the same architecture as the plugin DLL you plan to use.
+2. Copy `ClaudeUsagePlugin.dll` into the TrafficMonitor `plugins` directory, then restart TrafficMonitor.
+3. In TrafficMonitor, enable `Claude 5h`, `Claude 7d`, `Codex 5h`, and `Codex 7d` from the displayed items list.
+4. If you want Claude values to track the Claude web dashboard more closely, run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 login
+powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 watch
+```
+
+5. If your Codex data does not live in `%USERPROFILE%\.codex`, set `CODEX_HOME` in the Windows environment before launching TrafficMonitor.
+
+After setup, the taskbar should show `C5h`, `C7d`, `X5h`, and `X7d`, and the tooltip should show reset timing when that source exposes it.
+
 ## Scope
 
 - Claude and Codex account usage
