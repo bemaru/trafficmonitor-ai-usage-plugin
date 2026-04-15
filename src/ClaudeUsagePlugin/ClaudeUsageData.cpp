@@ -14,6 +14,8 @@ namespace
 
 constexpr unsigned long long REFRESH_INTERVAL_MS = 60ULL * 1000ULL;
 constexpr unsigned long long RETRY_INTERVAL_MS = 5ULL * 1000ULL;
+constexpr unsigned long long RATE_LIMIT_RETRY_FALLBACK_MS = 5ULL * 60ULL * 1000ULL;
+constexpr unsigned long long MAX_RETRY_AFTER_MS = 12ULL * 60ULL * 60ULL * 1000ULL;
 constexpr unsigned long long MAX_JSON_FILE_SIZE = 1024ULL * 1024ULL;
 constexpr wchar_t USAGE_API_HOST[] = L"api.anthropic.com";
 constexpr wchar_t USAGE_API_PATH[] = L"/api/oauth/usage";
@@ -133,6 +135,31 @@ bool FindJsonKey(const std::wstring& json, const wchar_t* key, size_t& value_pos
 
     value_pos = colon_pos + 1;
     return true;
+}
+
+bool QueryHeaderString(HINTERNET request, const wchar_t* header_name, std::wstring& value)
+{
+    value.clear();
+
+    DWORD size{};
+    if (!WinHttpQueryHeaders(request, WINHTTP_QUERY_CUSTOM, header_name, WINHTTP_NO_OUTPUT_BUFFER, &size, WINHTTP_NO_HEADER_INDEX))
+    {
+        if (GetLastError() != ERROR_INSUFFICIENT_BUFFER)
+            return false;
+    }
+
+    if (size == 0)
+        return false;
+
+    std::wstring buffer(size / sizeof(wchar_t), L'\0');
+    if (!WinHttpQueryHeaders(request, WINHTTP_QUERY_CUSTOM, header_name, buffer.empty() ? nullptr : &buffer[0], &size, WINHTTP_NO_HEADER_INDEX))
+        return false;
+
+    if (!buffer.empty() && buffer.back() == L'\0')
+        buffer.pop_back();
+
+    value = TrimString(buffer);
+    return !value.empty();
 }
 
 size_t FindMatchingBracket(const std::wstring& text, size_t open_pos, wchar_t open_char, wchar_t close_char)
@@ -293,6 +320,64 @@ bool FileTimeToUnixSeconds(const FILETIME& file_time, long long& unix_seconds)
     return true;
 }
 
+bool TryParseRetryAfterMs(const std::wstring& raw_value, unsigned long long& retry_after_ms)
+{
+    retry_after_ms = 0;
+
+    const std::wstring value = TrimString(raw_value);
+    if (value.empty())
+        return false;
+
+    bool numeric = true;
+    for (wchar_t ch : value)
+    {
+        if (ch < L'0' || ch > L'9')
+        {
+            numeric = false;
+            break;
+        }
+    }
+
+    if (numeric)
+    {
+        wchar_t* end_ptr{};
+        const unsigned long long seconds = wcstoull(value.c_str(), &end_ptr, 10);
+        if (end_ptr != value.c_str())
+        {
+            retry_after_ms = seconds * 1000ULL;
+            return true;
+        }
+    }
+
+    SYSTEMTIME retry_time{};
+    if (!WinHttpTimeToSystemTime(value.c_str(), &retry_time))
+        return false;
+
+    FILETIME retry_file_time{};
+    if (!SystemTimeToFileTime(&retry_time, &retry_file_time))
+        return false;
+
+    FILETIME now_file_time{};
+    GetSystemTimeAsFileTime(&now_file_time);
+
+    ULARGE_INTEGER retry_value{};
+    retry_value.LowPart = retry_file_time.dwLowDateTime;
+    retry_value.HighPart = retry_file_time.dwHighDateTime;
+
+    ULARGE_INTEGER now_value{};
+    now_value.LowPart = now_file_time.dwLowDateTime;
+    now_value.HighPart = now_file_time.dwHighDateTime;
+
+    if (retry_value.QuadPart <= now_value.QuadPart)
+    {
+        retry_after_ms = 0;
+        return true;
+    }
+
+    retry_after_ms = (retry_value.QuadPart - now_value.QuadPart) / 10000ULL;
+    return true;
+}
+
 std::wstring FormatDurationFromSeconds(unsigned long long total_seconds)
 {
     if (total_seconds < 60ULL)
@@ -438,9 +523,10 @@ bool LoadAccessToken(std::wstring& access_token)
     return TryGetJsonString(credentials_json, L"accessToken", access_token) && !access_token.empty();
 }
 
-bool FetchUsageApiJson(const std::wstring& access_token, std::wstring& response_body, DWORD& status_code)
+bool FetchUsageApiJson(const std::wstring& access_token, std::wstring& response_body, DWORD& status_code, unsigned long long& retry_after_ms)
 {
     status_code = 0;
+    retry_after_ms = 0;
     HINTERNET session{};
     HINTERNET connection{};
     HINTERNET request{};
@@ -480,6 +566,17 @@ bool FetchUsageApiJson(const std::wstring& access_token, std::wstring& response_
     {
         DWORD header_size = sizeof(status_code);
         WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &status_code, &header_size, WINHTTP_NO_HEADER_INDEX);
+
+        if (status_code == 429)
+        {
+            std::wstring retry_after_header;
+            if (QueryHeaderString(request, L"Retry-After", retry_after_header))
+            {
+                unsigned long long parsed_retry_after_ms{};
+                if (TryParseRetryAfterMs(retry_after_header, parsed_retry_after_ms))
+                    retry_after_ms = parsed_retry_after_ms;
+            }
+        }
 
         std::string response_bytes;
         while (true)
@@ -580,6 +677,9 @@ void CClaudeUsageData::RefreshIfNeeded()
         if (m_refresh_in_progress)
             return;
 
+        if (m_next_refresh_tick != 0 && now < m_next_refresh_tick)
+            return;
+
         const unsigned long long refresh_interval_ms = GetRefreshIntervalMs(m_last_refresh_succeeded);
         if (m_last_refresh_tick != 0 && now - m_last_refresh_tick < refresh_interval_ms)
             return;
@@ -587,12 +687,14 @@ void CClaudeUsageData::RefreshIfNeeded()
         m_refresh_in_progress = true;
     }
 
-    const bool succeeded = Refresh();
+    unsigned long long retry_after_ms{};
+    const bool succeeded = Refresh(retry_after_ms);
 
     {
         std::lock_guard<std::mutex> lock(m_state_mutex);
         m_last_refresh_tick = now;
         m_last_refresh_succeeded = succeeded;
+        m_next_refresh_tick = (retry_after_ms == 0 ? 0 : now + retry_after_ms);
         m_refresh_in_progress = false;
     }
 }
@@ -624,10 +726,10 @@ const std::wstring& CClaudeUsageData::GetTooltipText() const
     return tooltip_text;
 }
 
-bool CClaudeUsageData::Refresh()
+bool CClaudeUsageData::Refresh(unsigned long long& retry_after_ms)
 {
     Snapshot snapshot;
-    const bool succeeded = LoadFromUsageApi(snapshot);
+    const bool succeeded = LoadFromUsageApi(snapshot, retry_after_ms);
     FinalizeSnapshot(snapshot);
 
     std::lock_guard<std::mutex> lock(m_state_mutex);
@@ -635,8 +737,9 @@ bool CClaudeUsageData::Refresh()
     return succeeded;
 }
 
-bool CClaudeUsageData::LoadFromUsageApi(Snapshot& snapshot)
+bool CClaudeUsageData::LoadFromUsageApi(Snapshot& snapshot, unsigned long long& retry_after_ms)
 {
+    retry_after_ms = 0;
     std::wstring access_token;
     if (!LoadAccessToken(access_token))
     {
@@ -646,7 +749,7 @@ bool CClaudeUsageData::LoadFromUsageApi(Snapshot& snapshot)
 
     std::wstring response_json;
     DWORD status_code{};
-    if (!FetchUsageApiJson(access_token, response_json, status_code))
+    if (!FetchUsageApiJson(access_token, response_json, status_code, retry_after_ms))
     {
         snapshot.error_text = L"Claude usage API request failed";
         return false;
@@ -659,7 +762,15 @@ bool CClaudeUsageData::LoadFromUsageApi(Snapshot& snapshot)
     }
     if (status_code == 429)
     {
+        if (retry_after_ms == 0)
+            retry_after_ms = RATE_LIMIT_RETRY_FALLBACK_MS;
+        if (retry_after_ms > MAX_RETRY_AFTER_MS)
+            retry_after_ms = MAX_RETRY_AFTER_MS;
+
         snapshot.error_text = L"Claude usage API rate limited";
+        snapshot.error_text += L" (retry in ";
+        snapshot.error_text += FormatDurationFromSeconds((retry_after_ms + 999ULL) / 1000ULL);
+        snapshot.error_text += L")";
         return false;
     }
     if (status_code != HTTP_STATUS_OK)

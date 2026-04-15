@@ -42,8 +42,8 @@ private:
         std::wstring error_text;
     };
 
-    bool Refresh();
-    static bool LoadFromUsageApi(Snapshot& snapshot);
+    bool Refresh(unsigned long long& retry_after_ms);
+    static bool LoadFromUsageApi(Snapshot& snapshot, unsigned long long& retry_after_ms);
     static void FinalizeSnapshot(Snapshot& snapshot);
     static bool HasAvailableMetric(const Snapshot& snapshot);
 
@@ -51,6 +51,7 @@ private:
     mutable std::mutex m_state_mutex;
     Snapshot m_snapshot;
     unsigned long long m_last_refresh_tick{};
+    unsigned long long m_next_refresh_tick{};
     bool m_last_refresh_succeeded{};
     bool m_refresh_in_progress{};
 };

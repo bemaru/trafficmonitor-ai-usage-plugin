@@ -44,7 +44,8 @@ Codex usage:
 Refresh behavior:
 
 - Claude success refresh: 60 seconds
-- Claude failure retry: 5 seconds
+- Claude other failure retry: 5 seconds
+- Claude rate limit retry: respects `Retry-After` when present, otherwise falls back to 5 minutes
 - Codex success refresh: 60 seconds
 - Codex failure retry: 5 seconds
 
