@@ -320,23 +320,42 @@ function pickClaudeOrganization(organizations, lastActiveOrg) {
   );
 }
 
-async function fetchUsageSnapshot() {
-  const cookies = loadClaudeCookies();
-  const cookieHeader = buildCookieHeader(cookies);
-  const organizations = await fetchJsonWithCookies('https://claude.ai/api/organizations', cookieHeader);
-  if (!Array.isArray(organizations) || organizations.length === 0) {
-    throw new Error('No Claude organizations available');
-  }
+function shouldRetryWithOrganizationLookup(error) {
+  return Boolean(error && error.httpStatus && (error.httpStatus === 400 || error.httpStatus === 404));
+}
 
-  const organization = pickClaudeOrganization(organizations, cookies.get('lastActiveOrg'));
-  const organizationId = organization?.uuid || organization?.id;
+async function fetchUsageForOrganization(cookieHeader, organizationId, organizationName = null) {
   if (!organizationId) {
     throw new Error('Organization id not found');
   }
 
   const usage = await fetchJsonWithCookies(`https://claude.ai/api/organizations/${organizationId}/usage`, cookieHeader);
   const payload = normalizeUsagePayload(usage);
-  return { organizationId, organizationName: organization?.name || null, payload };
+  return { organizationId, organizationName, payload };
+}
+
+async function fetchUsageSnapshot() {
+  const cookies = loadClaudeCookies();
+  const cookieHeader = buildCookieHeader(cookies);
+  const lastActiveOrg = cookies.get('lastActiveOrg');
+  if (lastActiveOrg) {
+    try {
+      return await fetchUsageForOrganization(cookieHeader, lastActiveOrg);
+    } catch (error) {
+      if (!shouldRetryWithOrganizationLookup(error)) {
+        throw error;
+      }
+    }
+  }
+
+  const organizations = await fetchJsonWithCookies('https://claude.ai/api/organizations', cookieHeader);
+  if (!Array.isArray(organizations) || organizations.length === 0) {
+    throw new Error('No Claude organizations available');
+  }
+
+  const organization = pickClaudeOrganization(organizations, lastActiveOrg);
+  const organizationId = organization?.uuid || organization?.id;
+  return fetchUsageForOrganization(cookieHeader, organizationId, organization?.name || null);
 }
 
 function classifyError(error) {
