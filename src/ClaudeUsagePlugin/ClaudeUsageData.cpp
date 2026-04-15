@@ -29,6 +29,7 @@ constexpr wchar_t USAGE_API_BETA_HEADER[] = L"oauth-2025-04-20";
 constexpr wchar_t PLUGIN_CACHE_DIR_NAME[] = L"trafficmonitor-claude-usage-plugin";
 constexpr wchar_t LEGACY_PLUGIN_CACHE_DIR_NAME[] = L"trafficmonitor-ai-usage-plugin";
 constexpr wchar_t HELPER_CACHE_FILE_NAME[] = L"claude-web-usage.json";
+constexpr wchar_t HELPER_STATUS_FILE_NAME[] = L"claude-web-helper-status.json";
 constexpr wchar_t PLUGIN_CACHE_FILE_NAME[] = L"claude-usage.json";
 constexpr wchar_t STATUSLINE_CACHE_FILE_NAME[] = L"claude-statusline.json";
 
@@ -112,6 +113,11 @@ std::wstring GetPluginCachePath()
 std::wstring GetHelperCachePath()
 {
     return BuildCachePath(GetPluginCacheDir(), HELPER_CACHE_FILE_NAME);
+}
+
+std::wstring GetHelperStatusPath()
+{
+    return BuildCachePath(GetPluginCacheDir(), HELPER_STATUS_FILE_NAME);
 }
 
 std::wstring GetLegacyPluginCachePath()
@@ -929,6 +935,87 @@ bool TryLoadHelperUsageSnapshot(CClaudeUsageData::Snapshot& snapshot, bool requi
     return true;
 }
 
+std::wstring BuildHelperStatusSummary(const std::wstring& state, const std::wstring& error_text)
+{
+    if (state == L"login_browser_opened")
+        return L"Claude web helper login window is open";
+    if (state == L"login_required")
+        return L"Claude web helper needs login";
+    if (state == L"access_denied")
+        return L"Claude web helper signed in, but usage access was denied";
+    if (state == L"rate_limited")
+        return L"Claude web helper hit a rate limit";
+    if (state == L"profile_in_use")
+        return L"Claude web helper browser profile is still in use";
+    if (state == L"cloudflare_blocked")
+        return L"Claude web helper is blocked by Cloudflare";
+    if (state == L"request_failed")
+    {
+        std::wstring text = L"Claude web helper could not refresh usage";
+        if (!error_text.empty() && error_text.rfind(L"HTTP ", 0) == 0)
+        {
+            text += L" (";
+            text += error_text;
+            text += L")";
+        }
+        return text;
+    }
+    if (state == L"crashed")
+        return L"Claude web helper crashed";
+    if (state == L"ok")
+        return std::wstring();
+    if (state.empty())
+        return std::wstring();
+
+    return L"Claude web helper status: " + state;
+}
+
+bool TryLoadHelperStatusSummary(std::wstring& summary)
+{
+    summary.clear();
+
+    const std::wstring status_path = GetHelperStatusPath();
+    if (status_path.empty() || !FileExists(status_path))
+        return false;
+
+    std::wstring status_json;
+    if (!ReadUtf8File(status_path, status_json))
+        return false;
+
+    std::wstring state;
+    if (!TryGetJsonString(status_json, L"state", state))
+        state.clear();
+
+    std::wstring error_text;
+    TryGetJsonString(status_json, L"error", error_text);
+
+    if (state == L"ok")
+    {
+        const std::wstring helper_cache_path = GetHelperCachePath();
+        unsigned long long helper_last_write_time_ms{};
+        unsigned long long now_ms{};
+        if (GetFileLastWriteTimeMs(helper_cache_path, helper_last_write_time_ms) &&
+            GetCurrentTimeMs(now_ms) &&
+            now_ms >= helper_last_write_time_ms &&
+            now_ms - helper_last_write_time_ms > HELPER_CACHE_MAX_AGE_MS)
+        {
+            summary = L"Claude web helper snapshot is stale; make sure watch is running";
+            return true;
+        }
+
+        if (!FileExists(helper_cache_path))
+        {
+            summary = L"Claude web helper has not produced a snapshot yet";
+            return true;
+        }
+
+        return false;
+    }
+
+    summary = BuildHelperStatusSummary(state, error_text);
+    return !summary.empty();
+}
+
 bool TryLoadCachedUsageSnapshot(CClaudeUsageData::Snapshot& snapshot, bool require_fresh_cache)
 {
     std::vector<UsageCacheCandidate> candidates;
@@ -1121,7 +1208,8 @@ bool CClaudeUsageData::LoadFromUsageApi(Snapshot& snapshot, unsigned long long& 
     if (TryLoadHelperUsageSnapshot(snapshot, true))
         return true;
 
-    snapshot.error_text = L"Claude web helper snapshot unavailable";
+    if (!TryLoadHelperStatusSummary(snapshot.error_text))
+        snapshot.error_text = L"Claude web helper snapshot unavailable";
     return false;
 }
 

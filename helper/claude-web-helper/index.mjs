@@ -17,10 +17,12 @@ const LOCAL_STATE_PATH = path.join(PROFILE_DIR, 'Local State');
 const COOKIES_DB_PATH = path.join(PROFILE_DIR, 'Default', 'Network', 'Cookies');
 const USAGE_CACHE_PATH = path.join(BASE_DIR, 'claude-web-usage.json');
 const STATUS_PATH = path.join(BASE_DIR, 'claude-web-helper-status.json');
+const WATCH_LOCK_PATH = path.join(BASE_DIR, 'claude-web-helper-watch.lock');
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36';
 
 let cachedMasterKey = null;
+let watchLockHandle = null;
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -74,6 +76,88 @@ async function writeStatus(state, details = {}) {
     updated_at: new Date().toISOString(),
     ...details,
   });
+}
+
+function isProcessRunning(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return false;
+  }
+
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error && error.code === 'EPERM';
+  }
+}
+
+async function tryReadJsonFile(filePath) {
+  try {
+    return JSON.parse(await fsp.readFile(filePath, 'utf8'));
+  } catch (error) {
+    if (error && error.code === 'ENOENT') {
+      return null;
+    }
+    return null;
+  }
+}
+
+function releaseWatchLock() {
+  if (!watchLockHandle) {
+    return;
+  }
+
+  try {
+    if (typeof watchLockHandle.fd === 'number') {
+      fs.closeSync(watchLockHandle.fd);
+    }
+  } catch {
+    // ignore close failure during shutdown
+  }
+
+  try {
+    fs.unlinkSync(WATCH_LOCK_PATH);
+  } catch (error) {
+    if (!error || error.code !== 'ENOENT') {
+      // ignore cleanup failure during shutdown
+    }
+  }
+
+  watchLockHandle = null;
+}
+
+async function acquireWatchLock() {
+  await ensureBaseDir();
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const handle = await fsp.open(WATCH_LOCK_PATH, 'wx');
+      const payload = {
+        pid: process.pid,
+        mode: 'watch',
+        started_at: new Date().toISOString(),
+        refresh_ms: DEFAULT_REFRESH_MS,
+      };
+      await handle.writeFile(`${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+      watchLockHandle = handle;
+      return true;
+    } catch (error) {
+      if (!error || error.code !== 'EEXIST') {
+        throw error;
+      }
+
+      const existingLock = await tryReadJsonFile(WATCH_LOCK_PATH);
+      const existingPid = Number(existingLock && existingLock.pid);
+      if (isProcessRunning(existingPid) && existingPid !== process.pid) {
+        console.log(`Claude helper watch already running (pid ${existingPid}).`);
+        return false;
+      }
+
+      await removeFileIfExists(WATCH_LOCK_PATH);
+    }
+  }
+
+  throw new Error('Claude helper watch lock could not be acquired');
 }
 
 function isProbablyJson(text) {
@@ -449,6 +533,19 @@ async function runLogin() {
 }
 
 async function runWatch() {
+  if (!(await acquireWatchLock())) {
+    return 0;
+  }
+
+  const releaseAndExit = (exitCode) => {
+    releaseWatchLock();
+    process.exit(exitCode);
+  };
+
+  process.once('SIGINT', () => releaseAndExit(0));
+  process.once('SIGTERM', () => releaseAndExit(0));
+  process.once('exit', releaseWatchLock);
+
   while (true) {
     await runOnce();
     await delay(DEFAULT_REFRESH_MS);

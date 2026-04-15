@@ -247,10 +247,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 watch
 
 - Repeats the cookie-based web fetch every 60 seconds
 - Keeps the helper snapshot fresh for TrafficMonitor
+- Refuses duplicate `watch` processes; if one is already running, a second start exits after printing the existing watcher PID
 
 Operational notes:
 
 - `login` is the only interactive step. After that, `watch` is the normal background mode.
+- `watch` is single-instance. Starting it again while one watcher is already running simply reports the existing watcher and exits.
 - Close the helper browser window before `once` or `watch`, otherwise the Chromium cookies database may stay locked.
 - The helper reads the dedicated profile's `Local State` and `Cookies` database and decrypts them under the same Windows user account.
 - The helper uses only Node built-ins under `helper\claude-web-helper`; no separate Playwright install is required.
@@ -295,7 +297,7 @@ After installation or setup, check the following:
 ## Troubleshooting
 
 - Claude values show `--` or `Claude account usage unavailable`:
-  Verify that `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-usage.json` exists and was updated recently by the helper.
+  Verify that `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-usage.json` exists and was updated recently by the helper. The Claude tooltip now also surfaces the latest helper status when no fresh helper snapshot is available.
 
 - Claude web helper status shows `login_required` or `access_denied`:
   Run `powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 login` again and complete the Claude web login in the opened browser window.
