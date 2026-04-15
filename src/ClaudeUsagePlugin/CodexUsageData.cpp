@@ -840,11 +840,6 @@ void CCodexUsageData::FinalizeSnapshot(Snapshot& snapshot)
     snapshot.tooltip_text += BuildMetricTooltip(L"5h", snapshot.rolling_5h);
     snapshot.tooltip_text += L"\n";
     snapshot.tooltip_text += BuildMetricTooltip(L"7d", snapshot.rolling_7d);
-    if (!snapshot.source_text.empty())
-    {
-        snapshot.tooltip_text += L"\nSource: ";
-        snapshot.tooltip_text += snapshot.source_text;
-    }
 }
 
 bool CCodexUsageData::HasAvailableMetric(const Snapshot& snapshot)

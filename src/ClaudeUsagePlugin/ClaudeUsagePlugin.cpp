@@ -21,8 +21,8 @@ DrawColors GetDrawColors(ClaudeUsageWindow window, bool dark_mode)
     }
 
     return dark_mode
-        ? DrawColors{ RGB(67, 203, 144), RGB(42, 72, 58), RGB(64, 108, 84), RGB(220, 228, 240) }
-        : DrawColors{ RGB(27, 152, 102), RGB(224, 244, 233), RGB(173, 206, 184), RGB(54, 62, 76) };
+        ? DrawColors{ RGB(133, 186, 255), RGB(46, 58, 79), RGB(74, 96, 128), RGB(220, 228, 240) }
+        : DrawColors{ RGB(79, 142, 222), RGB(229, 236, 247), RGB(181, 194, 214), RGB(54, 62, 76) };
 }
 
 int MeasureTextWidth(CDC* pDC, const wchar_t* text)
@@ -66,13 +66,13 @@ DrawColors GetCodexDrawColors(CodexUsageWindow window, bool dark_mode)
     if (window == CodexUsageWindow::Rolling5Hours)
     {
         return dark_mode
-            ? DrawColors{ RGB(255, 154, 94), RGB(74, 52, 38), RGB(115, 84, 63), RGB(226, 230, 236) }
-            : DrawColors{ RGB(217, 102, 37), RGB(249, 232, 219), RGB(214, 176, 148), RGB(54, 62, 76) };
+            ? DrawColors{ RGB(74, 201, 120), RGB(40, 68, 49), RGB(66, 100, 78), RGB(226, 230, 236) }
+            : DrawColors{ RGB(33, 160, 96), RGB(224, 244, 233), RGB(173, 206, 184), RGB(54, 62, 76) };
     }
 
     return dark_mode
-        ? DrawColors{ RGB(163, 127, 255), RGB(58, 46, 82), RGB(92, 76, 122), RGB(226, 230, 236) }
-        : DrawColors{ RGB(108, 72, 211), RGB(236, 229, 252), RGB(189, 176, 227), RGB(54, 62, 76) };
+        ? DrawColors{ RGB(110, 214, 146), RGB(44, 73, 54), RGB(72, 109, 84), RGB(226, 230, 236) }
+        : DrawColors{ RGB(74, 176, 114), RGB(229, 246, 236), RGB(179, 210, 190), RGB(54, 62, 76) };
 }
 
 void DrawUsageItemBar(CDC* pDC, const DrawColors& colors, const wchar_t* label_text, const wchar_t* value_text, bool available, float ratio, int x, int y, int w, int h)

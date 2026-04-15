@@ -1167,11 +1167,6 @@ void CClaudeUsageData::FinalizeSnapshot(Snapshot& snapshot)
         snapshot.tooltip_text += L"\n";
         snapshot.tooltip_text += snapshot.error_text;
     }
-    if (!snapshot.source_text.empty())
-    {
-        snapshot.tooltip_text += L"\nSource: ";
-        snapshot.tooltip_text += snapshot.source_text;
-    }
 }
 
 bool CClaudeUsageData::HasAvailableMetric(const Snapshot& snapshot)
