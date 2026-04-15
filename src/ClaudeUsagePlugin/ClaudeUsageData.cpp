@@ -197,6 +197,28 @@ bool GetFileLastWriteTimeMs(const std::wstring& path, unsigned long long& last_w
     return true;
 }
 
+bool IsFreshFile(const std::wstring& path, unsigned long long max_age_ms)
+{
+    if (path.empty() || !FileExists(path))
+        return false;
+
+    unsigned long long last_write_time_ms{};
+    if (!GetFileLastWriteTimeMs(path, last_write_time_ms))
+        return false;
+
+    unsigned long long now_ms{};
+    if (!GetCurrentTimeMs(now_ms))
+        return false;
+
+    return !(now_ms >= last_write_time_ms && now_ms - last_write_time_ms > max_age_ms);
+}
+
+bool HasFreshStatuslineCache()
+{
+    return IsFreshFile(GetStatuslineCachePath(), CACHE_MAX_AGE_MS) ||
+        IsFreshFile(GetLegacyStatuslineCachePath(), CACHE_MAX_AGE_MS);
+}
+
 std::wstring GetClaudeConfigDir()
 {
     const std::wstring override_dir = TrimString(GetEnvVar(L"CLAUDE_CONFIG_DIR"));
@@ -965,7 +987,7 @@ void CClaudeUsageData::RefreshIfNeeded()
         if (m_refresh_in_progress)
             return;
 
-        if (m_next_refresh_tick != 0 && started_at < m_next_refresh_tick)
+        if (m_next_refresh_tick != 0 && started_at < m_next_refresh_tick && !HasFreshStatuslineCache())
             return;
 
         const unsigned long long refresh_interval_ms = GetRefreshIntervalMs(m_last_refresh_succeeded);
