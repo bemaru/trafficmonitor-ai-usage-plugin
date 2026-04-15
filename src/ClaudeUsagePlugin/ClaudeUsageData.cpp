@@ -14,7 +14,7 @@ namespace
 {
 #pragma comment(lib, "winhttp.lib")
 
-constexpr unsigned long long REFRESH_INTERVAL_MS = 180ULL * 1000ULL;
+constexpr unsigned long long REFRESH_INTERVAL_MS = 30ULL * 1000ULL;
 constexpr unsigned long long RETRY_INTERVAL_MS = 30ULL * 1000ULL;
 constexpr unsigned long long STATUSLINE_REFRESH_INTERVAL_MS = 5ULL * 1000ULL;
 constexpr unsigned long long RATE_LIMIT_RETRY_FALLBACK_MS = 5ULL * 60ULL * 1000ULL;
@@ -1116,99 +1116,13 @@ bool CClaudeUsageData::Refresh(unsigned long long& retry_after_ms, bool allow_ap
 bool CClaudeUsageData::LoadFromUsageApi(Snapshot& snapshot, unsigned long long& retry_after_ms, bool allow_api_request)
 {
     retry_after_ms = 0;
+    (void)allow_api_request;
 
     if (TryLoadHelperUsageSnapshot(snapshot, true))
         return true;
 
-    if (!allow_api_request)
-        return TryLoadCachedUsageSnapshot(snapshot, true);
-
-    std::wstring access_token;
-    if (!LoadAccessToken(access_token))
-    {
-        snapshot.error_text = L"Claude access token not found";
-        if (TryLoadCachedUsageSnapshot(snapshot, true))
-        {
-            snapshot.error_text += L"; showing cached values";
-            return false;
-        }
-        return false;
-    }
-
-    std::wstring response_json;
-    DWORD status_code{};
-    if (!FetchUsageApiJson(access_token, response_json, status_code, retry_after_ms))
-    {
-        snapshot.error_text = L"Claude usage API request failed";
-        if (TryLoadCachedUsageSnapshot(snapshot, true))
-        {
-            snapshot.error_text += L"; showing cached values";
-            return false;
-        }
-        return false;
-    }
-
-    if (status_code == HTTP_STATUS_DENIED || status_code == HTTP_STATUS_FORBIDDEN)
-    {
-        snapshot.error_text = L"Claude usage API HTTP ";
-        snapshot.error_text += std::to_wstring(status_code);
-        if (status_code == HTTP_STATUS_DENIED)
-            snapshot.error_text += L" (login required)";
-        else
-            snapshot.error_text += L" (access denied)";
-        if (TryLoadCachedUsageSnapshot(snapshot, true))
-        {
-            snapshot.error_text += L"; showing cached values";
-            return false;
-        }
-        return false;
-    }
-    if (status_code == 429)
-    {
-        if (retry_after_ms == 0)
-            retry_after_ms = RATE_LIMIT_RETRY_FALLBACK_MS;
-        if (retry_after_ms > MAX_RETRY_AFTER_MS)
-            retry_after_ms = MAX_RETRY_AFTER_MS;
-
-        snapshot.error_text = L"Claude usage API HTTP 429 rate limited";
-        snapshot.error_text += L" (retry in ";
-        snapshot.error_text += FormatDurationFromSeconds((retry_after_ms + 999ULL) / 1000ULL);
-        snapshot.error_text += L")";
-        if (TryLoadCachedUsageSnapshot(snapshot, true))
-        {
-            snapshot.error_text += L"; showing cached values";
-            return false;
-        }
-        return false;
-    }
-    if (status_code != HTTP_STATUS_OK)
-    {
-        snapshot.error_text = L"Claude usage API HTTP ";
-        snapshot.error_text += std::to_wstring(status_code);
-        if (TryLoadCachedUsageSnapshot(snapshot, true))
-        {
-            snapshot.error_text += L"; showing cached values";
-            return false;
-        }
-        return false;
-    }
-
-    const bool has_five_hour = LoadMetricFromApiSection(response_json, L"five_hour", snapshot.rolling_5h);
-    const bool has_seven_day = LoadMetricFromApiSection(response_json, L"seven_day", snapshot.rolling_7d);
-    if (!has_five_hour && !has_seven_day)
-    {
-        snapshot.error_text = L"Claude usage API returned unexpected data";
-        if (TryLoadCachedUsageSnapshot(snapshot, true))
-        {
-            snapshot.error_text += L"; showing cached values";
-            return false;
-        }
-        return false;
-    }
-
-    snapshot.source_text = L"Claude OAuth usage API";
-    WriteUsageCache(response_json);
-    return true;
+    snapshot.error_text = L"Claude web helper snapshot unavailable";
+    return false;
 }
 
 void CClaudeUsageData::FinalizeSnapshot(Snapshot& snapshot)
