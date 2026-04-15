@@ -35,3 +35,6 @@ ARM64EC/
 # Miscellaneous
 Thumbs.db
 Desktop.ini
+
+# Helper dependencies
+helper/claude-web-helper/node_modules/

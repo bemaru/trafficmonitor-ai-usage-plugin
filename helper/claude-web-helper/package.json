@@ -1,0 +1,15 @@
+{
+  "name": "trafficmonitor-claude-web-helper",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Claude web session helper for trafficmonitor-ai-usage-plugin",
+  "scripts": {
+    "login": "node index.mjs login",
+    "once": "node index.mjs once",
+    "watch": "node index.mjs watch"
+  },
+  "dependencies": {
+    "playwright-core": "^1.59.1"
+  }
+}

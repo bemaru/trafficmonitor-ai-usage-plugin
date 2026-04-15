@@ -19,6 +19,7 @@ constexpr unsigned long long RETRY_INTERVAL_MS = 30ULL * 1000ULL;
 constexpr unsigned long long STATUSLINE_REFRESH_INTERVAL_MS = 5ULL * 1000ULL;
 constexpr unsigned long long RATE_LIMIT_RETRY_FALLBACK_MS = 5ULL * 60ULL * 1000ULL;
 constexpr unsigned long long MAX_RETRY_AFTER_MS = 12ULL * 60ULL * 60ULL * 1000ULL;
+constexpr unsigned long long HELPER_CACHE_MAX_AGE_MS = 90ULL * 1000ULL;
 constexpr unsigned long long PLUGIN_CACHE_MAX_AGE_MS = 180ULL * 1000ULL;
 constexpr unsigned long long STATUSLINE_CACHE_MAX_AGE_MS = 60ULL * 1000ULL;
 constexpr unsigned long long MAX_JSON_FILE_SIZE = 1024ULL * 1024ULL;
@@ -27,6 +28,7 @@ constexpr wchar_t USAGE_API_PATH[] = L"/api/oauth/usage";
 constexpr wchar_t USAGE_API_BETA_HEADER[] = L"oauth-2025-04-20";
 constexpr wchar_t PLUGIN_CACHE_DIR_NAME[] = L"trafficmonitor-claude-usage-plugin";
 constexpr wchar_t LEGACY_PLUGIN_CACHE_DIR_NAME[] = L"trafficmonitor-ai-usage-plugin";
+constexpr wchar_t HELPER_CACHE_FILE_NAME[] = L"claude-web-usage.json";
 constexpr wchar_t PLUGIN_CACHE_FILE_NAME[] = L"claude-usage.json";
 constexpr wchar_t STATUSLINE_CACHE_FILE_NAME[] = L"claude-statusline.json";
 
@@ -105,6 +107,11 @@ std::wstring BuildCachePath(const std::wstring& cache_dir, const wchar_t* file_n
 std::wstring GetPluginCachePath()
 {
     return BuildCachePath(GetPluginCacheDir(), PLUGIN_CACHE_FILE_NAME);
+}
+
+std::wstring GetHelperCachePath()
+{
+    return BuildCachePath(GetPluginCacheDir(), HELPER_CACHE_FILE_NAME);
 }
 
 std::wstring GetLegacyPluginCachePath()
@@ -889,9 +896,50 @@ bool LoadSnapshotFromCachedJson(const std::wstring& json, CClaudeUsageData::Snap
     return has_api_5h || has_api_7d;
 }
 
+bool TryLoadHelperUsageSnapshot(CClaudeUsageData::Snapshot& snapshot, bool require_fresh_cache)
+{
+    const std::wstring helper_cache_path = GetHelperCachePath();
+    if (helper_cache_path.empty() || !FileExists(helper_cache_path))
+        return false;
+
+    unsigned long long last_write_time_ms{};
+    if (!GetFileLastWriteTimeMs(helper_cache_path, last_write_time_ms))
+        return false;
+
+    if (require_fresh_cache)
+    {
+        unsigned long long now_ms{};
+        if (!GetCurrentTimeMs(now_ms))
+            return false;
+        if (now_ms >= last_write_time_ms && now_ms - last_write_time_ms > HELPER_CACHE_MAX_AGE_MS)
+            return false;
+    }
+
+    std::wstring cached_json;
+    if (!ReadUtf8File(helper_cache_path, cached_json))
+        return false;
+
+    CClaudeUsageData::Snapshot cached_snapshot;
+    if (!LoadSnapshotFromCachedJson(cached_json, cached_snapshot))
+        return false;
+
+    snapshot.rolling_5h = cached_snapshot.rolling_5h;
+    snapshot.rolling_7d = cached_snapshot.rolling_7d;
+    snapshot.source_text = L"Claude web helper";
+    return true;
+}
+
 bool TryLoadCachedUsageSnapshot(CClaudeUsageData::Snapshot& snapshot, bool require_fresh_cache)
 {
     std::vector<UsageCacheCandidate> candidates;
+
+    const std::wstring helper_cache_path = GetHelperCachePath();
+    if (!helper_cache_path.empty() && FileExists(helper_cache_path))
+    {
+        unsigned long long last_write_time_ms{};
+        if (GetFileLastWriteTimeMs(helper_cache_path, last_write_time_ms))
+            candidates.push_back(UsageCacheCandidate{ helper_cache_path, L"Claude web helper", 5, last_write_time_ms, HELPER_CACHE_MAX_AGE_MS });
+    }
 
     const std::wstring statusline_cache_path = GetStatuslineCachePath();
     if (!statusline_cache_path.empty() && FileExists(statusline_cache_path))
@@ -1068,6 +1116,9 @@ bool CClaudeUsageData::Refresh(unsigned long long& retry_after_ms, bool allow_ap
 bool CClaudeUsageData::LoadFromUsageApi(Snapshot& snapshot, unsigned long long& retry_after_ms, bool allow_api_request)
 {
     retry_after_ms = 0;
+
+    if (TryLoadHelperUsageSnapshot(snapshot, true))
+        return true;
 
     if (!allow_api_request)
         return TryLoadCachedUsageSnapshot(snapshot, true);

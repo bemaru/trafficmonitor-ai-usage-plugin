@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+- Added an optional Playwright-based Claude web helper under `helper/claude-web-helper` plus the `scripts/claude-web-helper.ps1` wrapper.
+
+### Changed
+- Claude now prefers a fresh `claude-web-usage.json` helper snapshot before falling back to the OAuth usage API.
+
+### Fixed
+- Claude no longer keeps stale local fallback values indefinitely when the live source is unavailable.
+
 ## 0.3.7 - 2026-04-15
 
 ### Changed

@@ -8,7 +8,7 @@ Versioning and release notes are tracked in [CHANGELOG.md](CHANGELOG.md).
 ## Scope
 
 - Claude and Codex account usage
-- Claude tries the OAuth usage endpoint first, then falls back to the freshest available local cache or optional Claude Code statusline bridge data
+- Claude prefers the optional Claude web helper when it is configured and fresh, otherwise it tries the OAuth usage endpoint and then falls back to the freshest available local cache
 
 ## Runtime compatibility
 
@@ -33,11 +33,13 @@ Tooltip text also shows reset timing when the upstream data exposes it.
 
 Claude usage:
 
+- Prefers a fresh Claude web helper snapshot from `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-usage.json`
 - Reads the local Claude OAuth access token from `%USERPROFILE%\.claude\.credentials.json`
 - Or from `CLAUDE_CONFIG_DIR\.credentials.json` if `CLAUDE_CONFIG_DIR` is set
 - Sends a read-only request to `https://api.anthropic.com/api/oauth/usage`
 - Caches successful Claude usage responses locally and reuses them for a short period
 - If the OAuth usage endpoint is rate-limited or temporarily unavailable, the plugin falls back to the freshest available local Claude snapshot
+- The optional Claude web helper writes a fresher web-session snapshot to `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-usage.json`
 - The optional Claude Code statusline bridge writes one such local snapshot to `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-statusline.json`
 - The included `scripts\claude-statusline-wrapper.ps1` keeps `ccstatusline` working while also writing that bridge cache
 
@@ -58,11 +60,13 @@ Codex usage:
 
 Refresh behavior:
 
+- Claude web helper fresh TTL: 90 seconds
 - Claude OAuth API success refresh: 180 seconds
 - Claude other failure retry: 30 seconds
 - Claude rate limit retry: respects `Retry-After` when present, otherwise falls back to 5 minutes
 - Claude statusline cache poll: 5 seconds while the OAuth API is in `Retry-After` backoff and a fresh bridge cache exists
-- Claude statusline / cache fresh TTL: 180 seconds
+- Claude statusline cache fresh TTL: 60 seconds
+- Claude OAuth snapshot fresh TTL: 180 seconds
 - Codex success refresh: 60 seconds
 - Codex failure retry: 5 seconds
 
@@ -114,6 +118,53 @@ The project file also contains `ARM64EC` configurations, but the published relea
 - `CODEX_HOME` is supported, but it must be visible to the Windows TrafficMonitor process. Setting `CODEX_HOME` only inside WSL is not enough unless TrafficMonitor inherits an equivalent Windows-side path.
 - WSL-style `/mnt/c/...` paths are accepted only when they resolve back to Windows storage.
 - If you override `CLAUDE_CONFIG_DIR` or `CODEX_HOME`, set them in the Windows environment before launching TrafficMonitor. WSL-only shell exports are not visible to the plugin.
+
+## Optional Claude web helper
+
+If you want Claude values to match the Claude web dashboard more closely, use the optional Playwright-based helper. It keeps a Claude web session, fetches `claude.ai` organization usage, and writes a fresh JSON snapshot that the DLL prefers over the OAuth usage endpoint.
+
+Helper files:
+
+- Auth state: `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-auth.json`
+- Usage snapshot: `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-usage.json`
+- Helper status: `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-helper-status.json`
+
+Prerequisites:
+
+- Windows
+- Node.js
+- Microsoft Edge or Google Chrome installed locally
+
+Commands from the repository root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 login
+```
+
+- Opens a visible browser window for a one-time Claude login
+- Saves the authenticated browser storage state locally
+- Writes the first usage snapshot if login succeeds
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 once
+```
+
+- Runs one headless fetch using the saved auth state
+- Updates `claude-web-usage.json` on success
+- Removes the usage snapshot on failure so the plugin falls back cleanly
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 watch
+```
+
+- Repeats the headless fetch every 60 seconds
+- Keeps the helper snapshot fresh for TrafficMonitor
+
+Operational notes:
+
+- `login` is the only interactive step. After that, `watch` is the normal background mode.
+- The helper uses the repository-local Node package under `helper\claude-web-helper`.
+- If helper auth expires, `claude-web-helper-status.json` will show the last failure state and the plugin will fall back to OAuth/statusline/unavailable.
 
 ## Optional Claude statusline bridge
 
@@ -182,14 +233,17 @@ After installation or setup, check the following:
 2. Display settings lists `Claude 5h`, `Claude 7d`, `Codex 5h`, `Codex 7d`.
 3. The taskbar items show percentages instead of `--`.
 4. The tooltip shows reset timing for any source that exposes reset metadata.
-5. If you enabled the Claude statusline bridge, `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-statusline.json` updates after a Claude Code response.
+5. If you enabled the Claude web helper, `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-usage.json` updates after a successful helper fetch.
+6. If you enabled the Claude statusline bridge, `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-statusline.json` updates after a Claude Code response.
 
 ## Constraints
 
 - This depends on Claude's local credential file layout.
+- The optional Claude web helper depends on an interactive Claude web login stored in its local browser state file.
 - The Claude OAuth usage endpoint used as fallback is undocumented and may change.
-- Claude cached fallback values come only from the plugin's own last successful API snapshot and can be stale when the live API is unavailable.
+- Claude fallback values are used only while their source is still fresh. Older values are discarded instead of being kept indefinitely.
 - The Claude statusline bridge only updates while Claude Code is running and emitting statusline payloads.
+- The Claude web helper is not bundled as a separate installer or Windows service; you run it from this repository or package it yourself.
 - After changing the `statusLine` command, open Claude Code and get at least one assistant response so the bridge cache is created.
 - Codex usage currently comes from local Codex state, not an official OpenAI usage API.
 - Codex values update only after Codex itself writes fresh rate-limit data locally.
@@ -215,8 +269,14 @@ After installation or setup, check the following:
 - `Claude usage API HTTP 429 rate limited`:
   The endpoint rejected requests temporarily. The plugin will wait until `Retry-After` and may show the freshest available local Claude snapshot while backoff is active.
 
+- Claude web helper status shows `login_required` or `access_denied`:
+  Run `powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 login` again and complete the Claude web login in the opened browser window.
+
+- Claude web helper status shows `rate_limited` or `request_failed`:
+  The helper could not fetch `claude.ai` usage right now. The plugin will fall back to OAuth, statusline, or `unavailable` depending on what is still fresh.
+
 - Claude values do not match the Claude Code UI:
-  The plugin now prefers the OAuth usage API when it is available. If you are depending on the local Claude Code fallback path, verify that the statusline wrapper is installed, Claude Code is actually running, and `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-statusline.json` is updating.
+  If you enabled the Claude web helper, it is now the preferred Claude source while its snapshot is still fresh. Otherwise the plugin prefers the OAuth usage API. Verify that the helper or statusline bridge is updating the expected file under `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin`.
 
 - `Claude usage API returned unexpected data`:
   The response schema changed and the plugin needs an update.
