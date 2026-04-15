@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.0 - 2026-04-15
+
+### Added
+- Added `Codex 5h` and `Codex 7d` items to the same plugin DLL.
+- Added tooltip reset timing for Claude and Codex when reset metadata is available.
+
+### Changed
+- README now documents the combined Claude/Codex behavior and local Codex data sources.
+
+### Fixed
+- Codex snapshot reads now use the same guarded snapshot pattern as Claude.
+- Failed refreshes retry after 5 seconds instead of waiting a full minute.
+
 ## 0.2.0 - 2026-04-15
 
 ### Added

@@ -6,29 +6,38 @@ Versioning and release notes are tracked in [CHANGELOG.md](/D:/jhkwak/repos/bema
 
 ## Scope
 
-- Claude account usage only
-- Codex usage is not included yet
+- Claude and Codex account usage
 - If refresh fails, the plugin falls back to `unavailable` instead of keeping stale values
 
 ## What the plugin shows
 
 - `C5h`: current 5-hour usage percentage
 - `C7d`: current 7-day usage percentage
+- `X5h`: current Codex 5-hour usage percentage
+- `X7d`: current Codex 7-day usage percentage
 
-The values come from the Claude OAuth usage API for the signed-in Claude account.
+Tooltip text also shows reset timing when the upstream data exposes it.
 
 ## How it works
 
-The plugin reads the local Claude OAuth access token from:
+Claude usage:
 
-- `%USERPROFILE%\.claude\.credentials.json`
-- or `CLAUDE_CONFIG_DIR\.credentials.json` if `CLAUDE_CONFIG_DIR` is set
+- Reads the local Claude OAuth access token from `%USERPROFILE%\.claude\.credentials.json`
+- Or from `CLAUDE_CONFIG_DIR\.credentials.json` if `CLAUDE_CONFIG_DIR` is set
+- Sends a read-only request to `https://api.anthropic.com/api/oauth/usage`
 
-It then sends a read-only request to:
+Codex usage:
 
-- `https://api.anthropic.com/api/oauth/usage`
+- Reads local Codex usage data from `%USERPROFILE%\.codex\logs_2.sqlite`
+- Falls back to `%USERPROFILE%\.codex\sessions\**\*.jsonl`
+- Respects `CODEX_HOME` when set, including WSL-style `/mnt/c/...` paths pointing back to Windows
 
-Refresh interval is currently one minute.
+Refresh behavior:
+
+- Claude success refresh: 60 seconds
+- Claude failure retry: 5 seconds
+- Codex success refresh: 60 seconds
+- Codex failure retry: 5 seconds
 
 ## Requirements
 
@@ -41,7 +50,7 @@ Refresh interval is currently one minute.
 
 ## Build
 
-Open [ClaudeUsagePlugin.sln](/D:/jhkwak/repos/bemaru/trafficmonitor-claude-usage-plugin/ClaudeUsagePlugin.sln) in Visual Studio and build `Release|x64`, or run:
+Open [ClaudeUsagePlugin.sln](/D:/jhkwak/repos/bemaru/trafficmonitor-claude-usage-plugin/ClaudeUsagePlugin.sln) in Visual Studio and build `Release|x64` or `Release|Win32`, or run:
 
 ```powershell
 MSBuild.exe .\ClaudeUsagePlugin.sln /t:ClaudeUsagePlugin /p:Configuration=Release /p:Platform=x64
@@ -50,6 +59,7 @@ MSBuild.exe .\ClaudeUsagePlugin.sln /t:ClaudeUsagePlugin /p:Configuration=Releas
 Build output:
 
 - `build\x64\Release\plugins\ClaudeUsagePlugin.dll`
+- `build\Release\plugins\ClaudeUsagePlugin.dll` for `Release|Win32`
 
 ## Install
 
@@ -57,7 +67,7 @@ Build output:
 2. Build this repository.
 3. Copy `build\x64\Release\plugins\ClaudeUsagePlugin.dll` into the TrafficMonitor `plugins` directory.
 4. Restart TrafficMonitor.
-5. Enable `Claude 5h` and `Claude 7d` in the displayed items list.
+5. Enable `Claude 5h`, `Claude 7d`, `Codex 5h`, `Codex 7d` in the displayed items list.
 
 This repo only ships the plugin DLL. It does not bundle TrafficMonitor itself.
 
@@ -65,6 +75,8 @@ This repo only ships the plugin DLL. It does not bundle TrafficMonitor itself.
 
 - This depends on Claude's local credential file layout.
 - This depends on Anthropic keeping the current usage endpoint and response shape compatible.
+- Codex usage currently comes from local Codex state, not an official OpenAI usage API.
+- Codex values update only after Codex itself writes fresh rate-limit data locally.
 - This is best-effort integration, not an official Anthropic integration surface.
 - This repository is intended to remain private for now.
 
@@ -89,3 +101,12 @@ This repo only ships the plugin DLL. It does not bundle TrafficMonitor itself.
 
 - `Claude usage API request failed`:
   Network, TLS, or endpoint reachability failed.
+
+- `Codex config directory not found`:
+  `CODEX_HOME` or `%USERPROFILE%\.codex` could not be resolved.
+
+- `Codex logs_2.sqlite unavailable`:
+  The local Codex SQLite store exists but could not be read.
+
+- `Codex sessions JSONL returned no rate limits`:
+  Codex local session logs were found, but no rate-limit payload was present yet.

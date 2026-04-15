@@ -476,12 +476,14 @@
   <ItemGroup>
     <ClInclude Include="..\..\include\PluginInterface.h" />
     <ClInclude Include="ClaudeUsageData.h" />
+    <ClInclude Include="CodexUsageData.h" />
     <ClInclude Include="ClaudeUsagePlugin.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="pch.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ClaudeUsageData.cpp" />
+    <ClCompile Include="CodexUsageData.cpp" />
     <ClCompile Include="ClaudeUsagePlugin.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>

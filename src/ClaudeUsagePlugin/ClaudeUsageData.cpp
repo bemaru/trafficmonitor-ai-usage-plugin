@@ -13,6 +13,7 @@ namespace
 #pragma comment(lib, "winhttp.lib")
 
 constexpr unsigned long long REFRESH_INTERVAL_MS = 60ULL * 1000ULL;
+constexpr unsigned long long RETRY_INTERVAL_MS = 5ULL * 1000ULL;
 constexpr unsigned long long MAX_JSON_FILE_SIZE = 1024ULL * 1024ULL;
 constexpr wchar_t USAGE_API_HOST[] = L"api.anthropic.com";
 constexpr wchar_t USAGE_API_PATH[] = L"/api/oauth/usage";
@@ -179,8 +180,10 @@ bool TryGetJsonString(const std::wstring& json, const wchar_t* key, std::wstring
     if (!FindJsonKey(json, key, value_pos))
         return false;
 
-    value_pos = json.find(L'"', value_pos);
-    if (value_pos == std::wstring::npos)
+    while (value_pos < json.size() && iswspace(json[value_pos]))
+        ++value_pos;
+
+    if (value_pos >= json.size() || json[value_pos] != L'"')
         return false;
 
     const size_t end_pos = json.find(L'"', value_pos + 1);
@@ -278,19 +281,72 @@ bool TryParseUtcIso8601(const std::wstring& text, FILETIME& file_time)
     return true;
 }
 
-std::wstring FormatResetTime(const std::wstring& raw_value)
+bool FileTimeToUnixSeconds(const FILETIME& file_time, long long& unix_seconds)
 {
-    FILETIME utc_file_time{};
-    if (!TryParseUtcIso8601(raw_value, utc_file_time))
-        return raw_value;
+    ULARGE_INTEGER value{};
+    value.LowPart = file_time.dwLowDateTime;
+    value.HighPart = file_time.dwHighDateTime;
+    if (value.QuadPart < 116444736000000000ULL)
+        return false;
 
+    unix_seconds = static_cast<long long>((value.QuadPart - 116444736000000000ULL) / 10000000ULL);
+    return true;
+}
+
+std::wstring FormatDurationFromSeconds(unsigned long long total_seconds)
+{
+    if (total_seconds < 60ULL)
+        return L"<1m";
+
+    const unsigned long long total_minutes = total_seconds / 60ULL;
+    const unsigned long long days = total_minutes / (24ULL * 60ULL);
+    const unsigned long long hours = (total_minutes / 60ULL) % 24ULL;
+    const unsigned long long minutes = total_minutes % 60ULL;
+
+    std::wstring text;
+    if (days > 0)
+    {
+        text = std::to_wstring(days) + L"d";
+        if (hours > 0)
+            text += L" " + std::to_wstring(hours) + L"h";
+        return text;
+    }
+
+    if (hours > 0)
+    {
+        text = std::to_wstring(hours) + L"h";
+        if (minutes > 0)
+            text += L" " + std::to_wstring(minutes) + L"m";
+        return text;
+    }
+
+    return std::to_wstring(minutes) + L"m";
+}
+
+std::wstring FormatResetRemaining(long long reset_at_unix_seconds)
+{
+    FILETIME now_file_time{};
+    GetSystemTimeAsFileTime(&now_file_time);
+
+    long long now_unix_seconds{};
+    if (!FileTimeToUnixSeconds(now_file_time, now_unix_seconds))
+        return std::wstring();
+
+    if (reset_at_unix_seconds <= now_unix_seconds)
+        return L"now";
+
+    return L"in " + FormatDurationFromSeconds(static_cast<unsigned long long>(reset_at_unix_seconds - now_unix_seconds));
+}
+
+bool FileTimeToLocalText(const FILETIME& utc_file_time, std::wstring& text)
+{
     SYSTEMTIME utc_time{};
     if (!FileTimeToSystemTime(&utc_file_time, &utc_time))
-        return raw_value;
+        return false;
 
     SYSTEMTIME local_time{};
     if (!SystemTimeToTzSpecificLocalTime(nullptr, &utc_time, &local_time))
-        return raw_value;
+        return false;
 
     wchar_t buffer[32];
     swprintf_s(
@@ -301,7 +357,20 @@ std::wstring FormatResetTime(const std::wstring& raw_value)
         static_cast<unsigned>(local_time.wDay),
         static_cast<unsigned>(local_time.wHour),
         static_cast<unsigned>(local_time.wMinute));
-    return buffer;
+    text = buffer;
+    return true;
+}
+
+std::wstring FormatResetTime(const std::wstring& raw_value)
+{
+    FILETIME utc_file_time{};
+    if (!TryParseUtcIso8601(raw_value, utc_file_time))
+        return raw_value;
+
+    std::wstring text;
+    if (!FileTimeToLocalText(utc_file_time, text))
+        return raw_value;
+    return text;
 }
 
 std::wstring FormatPercentage(double value)
@@ -327,13 +396,33 @@ std::wstring BuildMetricTooltip(const wchar_t* label, const CClaudeUsageData::Me
     }
 
     text += FormatPercentage(metric.percentage);
-    if (!metric.reset_time_text.empty())
+    const std::wstring reset_remaining = (metric.has_reset_time ? FormatResetRemaining(metric.reset_at_unix_seconds) : std::wstring());
+    if (!reset_remaining.empty() && !metric.reset_time_text.empty())
     {
         text += L" (resets ";
+        text += reset_remaining;
+        text += L" at ";
+        text += metric.reset_time_text;
+        text += L")";
+    }
+    else if (!reset_remaining.empty())
+    {
+        text += L" (resets ";
+        text += reset_remaining;
+        text += L")";
+    }
+    else if (!metric.reset_time_text.empty())
+    {
+        text += L" (resets at ";
         text += metric.reset_time_text;
         text += L")";
     }
     return text;
+}
+
+unsigned long long GetRefreshIntervalMs(bool last_refresh_succeeded)
+{
+    return (last_refresh_succeeded ? REFRESH_INTERVAL_MS : RETRY_INTERVAL_MS);
 }
 
 bool LoadAccessToken(std::wstring& access_token)
@@ -356,7 +445,7 @@ bool FetchUsageApiJson(const std::wstring& access_token, std::wstring& response_
     HINTERNET connection{};
     HINTERNET request{};
 
-    session = WinHttpOpen(L"TrafficMonitor_ClaudeUsagePlugin/0.2.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    session = WinHttpOpen(L"TrafficMonitor_ClaudeUsagePlugin/0.3.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (session == nullptr)
         return false;
 
@@ -459,7 +548,19 @@ bool LoadMetricFromApiSection(const std::wstring& response_json, const wchar_t* 
 
     std::wstring resets_at;
     if (TryGetJsonString(section_json, L"resets_at", resets_at))
-        metric.reset_time_text = FormatResetTime(resets_at);
+    {
+        FILETIME reset_file_time{};
+        if (TryParseUtcIso8601(resets_at, reset_file_time))
+        {
+            metric.has_reset_time = FileTimeToUnixSeconds(reset_file_time, metric.reset_at_unix_seconds);
+            if (!FileTimeToLocalText(reset_file_time, metric.reset_time_text))
+                metric.reset_time_text = resets_at;
+        }
+        else
+        {
+            metric.reset_time_text = resets_at;
+        }
+    }
 
     return true;
 }
@@ -474,29 +575,64 @@ CClaudeUsageData& CClaudeUsageData::Instance()
 void CClaudeUsageData::RefreshIfNeeded()
 {
     const unsigned long long now = GetTickCount64();
-    if (m_last_refresh_tick != 0 && now - m_last_refresh_tick < REFRESH_INTERVAL_MS)
-        return;
+    {
+        std::lock_guard<std::mutex> lock(m_state_mutex);
+        if (m_refresh_in_progress)
+            return;
 
-    Refresh();
-    m_last_refresh_tick = now;
+        const unsigned long long refresh_interval_ms = GetRefreshIntervalMs(m_last_refresh_succeeded);
+        if (m_last_refresh_tick != 0 && now - m_last_refresh_tick < refresh_interval_ms)
+            return;
+
+        m_refresh_in_progress = true;
+    }
+
+    const bool succeeded = Refresh();
+
+    {
+        std::lock_guard<std::mutex> lock(m_state_mutex);
+        m_last_refresh_tick = now;
+        m_last_refresh_succeeded = succeeded;
+        m_refresh_in_progress = false;
+    }
 }
 
 const std::wstring& CClaudeUsageData::GetValueText(ClaudeUsageWindow window) const
 {
-    return (window == ClaudeUsageWindow::Rolling5Hours ? m_snapshot.value_5h_text : m_snapshot.value_7d_text);
+    thread_local std::wstring value_text;
+
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    value_text = (window == ClaudeUsageWindow::Rolling5Hours ? m_snapshot.value_5h_text : m_snapshot.value_7d_text);
+    return value_text;
+}
+
+const CClaudeUsageData::Metric& CClaudeUsageData::GetMetric(ClaudeUsageWindow window) const
+{
+    thread_local Metric metric;
+
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    metric = (window == ClaudeUsageWindow::Rolling5Hours ? m_snapshot.rolling_5h : m_snapshot.rolling_7d);
+    return metric;
 }
 
 const std::wstring& CClaudeUsageData::GetTooltipText() const
 {
-    return m_snapshot.tooltip_text;
+    thread_local std::wstring tooltip_text;
+
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    tooltip_text = m_snapshot.tooltip_text;
+    return tooltip_text;
 }
 
-void CClaudeUsageData::Refresh()
+bool CClaudeUsageData::Refresh()
 {
     Snapshot snapshot;
-    LoadFromUsageApi(snapshot);
+    const bool succeeded = LoadFromUsageApi(snapshot);
     FinalizeSnapshot(snapshot);
+
+    std::lock_guard<std::mutex> lock(m_state_mutex);
     m_snapshot = snapshot;
+    return succeeded;
 }
 
 bool CClaudeUsageData::LoadFromUsageApi(Snapshot& snapshot)

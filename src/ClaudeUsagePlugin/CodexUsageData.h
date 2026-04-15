@@ -1,15 +1,15 @@
 #pragma once
 
-#include <string>
 #include <mutex>
+#include <string>
 
-enum class ClaudeUsageWindow
+enum class CodexUsageWindow
 {
     Rolling5Hours,
     Rolling7Days,
 };
 
-class CClaudeUsageData
+class CCodexUsageData
 {
 public:
     struct Metric
@@ -22,28 +22,33 @@ public:
     };
 
 public:
-    static CClaudeUsageData& Instance();
+    static CCodexUsageData& Instance();
 
     void RefreshIfNeeded();
-    const std::wstring& GetValueText(ClaudeUsageWindow window) const;
-    const Metric& GetMetric(ClaudeUsageWindow window) const;
+    const std::wstring& GetValueText(CodexUsageWindow window) const;
+    const Metric& GetMetric(CodexUsageWindow window) const;
     const std::wstring& GetTooltipText() const;
 
-private:
-    CClaudeUsageData() = default;
-
+public:
     struct Snapshot
     {
         Metric rolling_5h;
         Metric rolling_7d;
         std::wstring value_5h_text{ L"--" };
         std::wstring value_7d_text{ L"--" };
-        std::wstring tooltip_text{ L"Claude account usage unavailable" };
+        std::wstring tooltip_text{ L"Codex account usage unavailable" };
         std::wstring error_text;
+        std::wstring source_text;
     };
 
+private:
+    CCodexUsageData() = default;
+
     bool Refresh();
-    static bool LoadFromUsageApi(Snapshot& snapshot);
+    static bool LoadFromStore(Snapshot& snapshot);
+    static bool LoadFromSqliteStore(const std::wstring& store_path, Snapshot& snapshot);
+    static bool LoadFromSessionJsonlStore(const std::wstring& store_dir, Snapshot& snapshot);
+    static bool LoadLatestSessionJsonlFile(const std::wstring& file_path, Snapshot& snapshot);
     static void FinalizeSnapshot(Snapshot& snapshot);
     static bool HasAvailableMetric(const Snapshot& snapshot);
 
@@ -55,4 +60,4 @@ private:
     bool m_refresh_in_progress{};
 };
 
-#define g_claude_usage_data CClaudeUsageData::Instance()
+#define g_codex_usage_data CCodexUsageData::Instance()

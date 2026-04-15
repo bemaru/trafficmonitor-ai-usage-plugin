@@ -17,6 +17,9 @@
     <ClInclude Include="ClaudeUsageData.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="CodexUsageData.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="ClaudeUsagePlugin.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -29,6 +32,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ClaudeUsageData.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="CodexUsageData.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="ClaudeUsagePlugin.cpp">
