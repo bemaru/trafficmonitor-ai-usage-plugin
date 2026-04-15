@@ -265,6 +265,7 @@ Operational notes:
 - The helper reads the dedicated profile's `Local State` and `Cookies` database and decrypts them under the same Windows user account.
 - The helper uses only Node built-ins under `helper\claude-web-helper`; no separate Playwright install is required.
 - If helper auth expires, `claude-web-helper-status.json` will show the last failure state and the plugin will fall back to OAuth/statusline/unavailable.
+- Transient helper fetch failures such as upstream `HTTP 500` now keep the most recent helper snapshot only until the normal 90-second freshness window expires; older helper data is still discarded.
 
 ## Optional Claude statusline bridge
 

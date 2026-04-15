@@ -11,6 +11,7 @@
 
 ### Fixed
 - Claude no longer keeps stale local fallback values indefinitely when the live source is unavailable.
+- The Claude web helper now keeps the most recent successful helper snapshot across transient `request_failed` fetch errors, while the DLL still expires that snapshot after the existing 90-second freshness window.
 
 ## 0.3.7 - 2026-04-15
 

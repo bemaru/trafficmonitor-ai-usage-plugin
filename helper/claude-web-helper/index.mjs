@@ -365,6 +365,10 @@ function classifyError(error) {
   return 'request_failed';
 }
 
+function shouldRetainUsageSnapshotOnFailure(state) {
+  return state === 'request_failed';
+}
+
 async function writeUsagePayload(payload, organizationId, organizationName) {
   await ensureBaseDir();
   await atomicWriteJson(USAGE_CACHE_PATH, payload);
@@ -383,11 +387,21 @@ async function runOnce() {
     return 0;
   } catch (error) {
     await ensureBaseDir();
-    await removeFileIfExists(USAGE_CACHE_PATH);
-    await writeStatus(classifyError(error), {
+    const state = classifyError(error);
+    const retainedUsageSnapshot = shouldRetainUsageSnapshotOnFailure(state) && fs.existsSync(USAGE_CACHE_PATH);
+    if (!retainedUsageSnapshot) {
+      await removeFileIfExists(USAGE_CACHE_PATH);
+    }
+    await writeStatus(state, {
       error: error && error.message ? error.message : String(error),
+      retained_usage_snapshot: retainedUsageSnapshot,
+      usage_path: retainedUsageSnapshot ? USAGE_CACHE_PATH : undefined,
     });
-    console.error(`Claude helper failed: ${error && error.message ? error.message : error}`);
+    console.error(
+      `Claude helper failed: ${error && error.message ? error.message : error}${
+        retainedUsageSnapshot ? ' (keeping recent usage snapshot)' : ''
+      }`,
+    );
     return 1;
   }
 }
