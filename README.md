@@ -1,9 +1,26 @@
 # ClaudeUsagePlugin
 
-Private standalone repository for the `ClaudeUsagePlugin.dll` TrafficMonitor plug-in.
-It shows Claude and Codex account usage in the Windows taskbar.
+![Platform](https://img.shields.io/badge/platform-Windows-0078D4)
+![TrafficMonitor](https://img.shields.io/badge/TrafficMonitor-plugin-2EA043)
+![Arch](https://img.shields.io/badge/arch-x64%20%7C%20x86-555555)
+![Usage Sources](https://img.shields.io/badge/usage-Claude%20%2B%20Codex-0A7F5A)
+
+See Claude and Codex usage directly in the Windows taskbar through TrafficMonitor.
+This repo ships a single `ClaudeUsagePlugin.dll`, with an optional Claude web helper for fresher dashboard-like values.
 
 Versioning and release notes are tracked in [CHANGELOG.md](CHANGELOG.md).
+
+<p align="center">
+  <img src="docs/images/trafficmonitor-taskbar-compact.png" alt="TrafficMonitor taskbar showing Claude and Codex usage bars" />
+</p>
+
+## Highlights
+
+- Shows `C5h`, `C7d`, `X5h`, and `X7d` directly in TrafficMonitor
+- Ships as a single DLL for official TrafficMonitor installs
+- Prefers fresh Claude web-helper data when available, then falls back cleanly
+- Reads Codex usage from local Windows-readable state with `CODEX_HOME` support
+- Displays reset timing in tooltips when the upstream source exposes it
 
 ## Getting Started
 
