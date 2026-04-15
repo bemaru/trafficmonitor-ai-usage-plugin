@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.3.4 - 2026-04-15
+
+### Changed
+- Muted the `7d` bar colors for Claude and Codex so `5h` reads as the primary usage signal in the compact taskbar layout.
+
 ## 0.3.3 - 2026-04-15
 
 ### Changed
