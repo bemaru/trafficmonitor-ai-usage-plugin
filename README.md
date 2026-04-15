@@ -121,18 +121,18 @@ The project file also contains `ARM64EC` configurations, but the published relea
 
 ## Optional Claude web helper
 
-If you want Claude values to match the Claude web dashboard more closely, use the optional Playwright-based helper. It keeps a Claude web session, fetches `claude.ai` organization usage, and writes a fresh JSON snapshot that the DLL prefers over the OAuth usage endpoint.
+If you want Claude values to match the Claude web dashboard more closely, use the optional Claude web helper. It signs in through a dedicated local Edge/Chrome profile, reads the stored Claude cookies from that profile, fetches `claude.ai` organization usage, and writes a fresh JSON snapshot that the DLL prefers over the OAuth usage endpoint.
 
 Helper files:
 
-- Auth state: `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-auth.json`
+- Dedicated browser profile: `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-browser-profile`
 - Usage snapshot: `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-usage.json`
 - Helper status: `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-helper-status.json`
 
 Prerequisites:
 
 - Windows
-- Node.js
+- Node.js 22 or newer
 - Microsoft Edge or Google Chrome installed locally
 
 Commands from the repository root:
@@ -141,15 +141,16 @@ Commands from the repository root:
 powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 login
 ```
 
-- Opens a visible browser window for a one-time Claude login
-- Saves the authenticated browser storage state locally
-- Writes the first usage snapshot if login succeeds
+- Opens a normal browser window with the helper's dedicated local profile
+- Sign in to Claude there, then close that helper browser window
+- The login step only prepares the local profile and cookies
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 once
 ```
 
-- Runs one headless fetch using the saved auth state
+- Reads the saved Claude cookies from the helper browser profile
+- Calls `https://claude.ai/api/organizations` and the selected org's `/usage` endpoint directly
 - Updates `claude-web-usage.json` on success
 - Removes the usage snapshot on failure so the plugin falls back cleanly
 
@@ -157,13 +158,15 @@ powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 once
 powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 watch
 ```
 
-- Repeats the headless fetch every 60 seconds
+- Repeats the cookie-based web fetch every 60 seconds
 - Keeps the helper snapshot fresh for TrafficMonitor
 
 Operational notes:
 
 - `login` is the only interactive step. After that, `watch` is the normal background mode.
-- The helper uses the repository-local Node package under `helper\claude-web-helper`.
+- Close the helper browser window before `once` or `watch`, otherwise the Chromium cookies database may stay locked.
+- The helper reads the dedicated profile's `Local State` and `Cookies` database and decrypts them under the same Windows user account.
+- The helper uses only Node built-ins under `helper\claude-web-helper`; no separate Playwright install is required.
 - If helper auth expires, `claude-web-helper-status.json` will show the last failure state and the plugin will fall back to OAuth/statusline/unavailable.
 
 ## Optional Claude statusline bridge
@@ -239,11 +242,13 @@ After installation or setup, check the following:
 ## Constraints
 
 - This depends on Claude's local credential file layout.
-- The optional Claude web helper depends on an interactive Claude web login stored in its local browser state file.
+- The optional Claude web helper depends on an interactive Claude web login stored in its dedicated local Chromium profile.
 - The Claude OAuth usage endpoint used as fallback is undocumented and may change.
 - Claude fallback values are used only while their source is still fresh. Older values are discarded instead of being kept indefinitely.
 - The Claude statusline bridge only updates while Claude Code is running and emitting statusline payloads.
 - The Claude web helper is not bundled as a separate installer or Windows service; you run it from this repository or package it yourself.
+- The Claude web helper currently requires Node.js 22+ because it uses the built-in `node:sqlite` module to read the local Chromium cookies database.
+- The Claude web helper decrypts Chromium cookies through Windows DPAPI, so it must run under the same Windows user that completed the helper login.
 - After changing the `statusLine` command, open Claude Code and get at least one assistant response so the bridge cache is created.
 - Codex usage currently comes from local Codex state, not an official OpenAI usage API.
 - Codex values update only after Codex itself writes fresh rate-limit data locally.
@@ -271,6 +276,9 @@ After installation or setup, check the following:
 
 - Claude web helper status shows `login_required` or `access_denied`:
   Run `powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 login` again and complete the Claude web login in the opened browser window.
+
+- Claude web helper status shows `profile_in_use`:
+  Close the helper browser window that was opened by `login`, then run `once` or `watch` again.
 
 - Claude web helper status shows `rate_limited` or `request_failed`:
   The helper could not fetch `claude.ai` usage right now. The plugin will fall back to OAuth, statusline, or `unavailable` depending on what is still fresh.

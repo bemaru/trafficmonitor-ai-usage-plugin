@@ -1,20 +1,26 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
-import { chromium } from 'playwright-core';
+import { spawn, spawnSync } from 'node:child_process';
+import { DatabaseSync } from 'node:sqlite';
 
 const MODE = (process.argv[2] || 'once').toLowerCase();
 const DEFAULT_REFRESH_MS = parseInt(process.env.CLAUDE_WEB_HELPER_REFRESH_MS || '60000', 10);
 const BASE_DIR = process.env.LOCALAPPDATA
   ? path.join(process.env.LOCALAPPDATA, 'trafficmonitor-claude-usage-plugin')
   : path.join(os.homedir(), '.cache', 'trafficmonitor-claude-usage-plugin');
-const AUTH_STATE_PATH = path.join(BASE_DIR, 'claude-web-auth.json');
+const PROFILE_DIR = path.join(BASE_DIR, 'claude-browser-profile');
+const LOCAL_STATE_PATH = path.join(PROFILE_DIR, 'Local State');
+const COOKIES_DB_PATH = path.join(PROFILE_DIR, 'Default', 'Network', 'Cookies');
 const USAGE_CACHE_PATH = path.join(BASE_DIR, 'claude-web-usage.json');
 const STATUS_PATH = path.join(BASE_DIR, 'claude-web-helper-status.json');
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36';
+
+let cachedMasterKey = null;
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -38,6 +44,10 @@ function getBrowserPath() {
 
 async function ensureBaseDir() {
   await fsp.mkdir(BASE_DIR, { recursive: true });
+}
+
+async function ensureProfileDir() {
+  await fsp.mkdir(PROFILE_DIR, { recursive: true });
 }
 
 async function atomicWriteJson(filePath, value) {
@@ -107,87 +117,226 @@ function normalizeUsagePayload(raw) {
   };
 }
 
-async function createBrowserContext({ headless }) {
-  const executablePath = getBrowserPath();
-  if (!executablePath) {
-    throw new Error('Browser executable not found. Set CLAUDE_WEB_HELPER_BROWSER.');
+function getLocalStatePayload() {
+  if (!fs.existsSync(LOCAL_STATE_PATH)) {
+    throw new Error(`Claude helper local state not found at ${LOCAL_STATE_PATH}`);
   }
 
-  const browser = await chromium.launch({
-    executablePath,
-    headless,
+  return JSON.parse(fs.readFileSync(LOCAL_STATE_PATH, 'utf8'));
+}
+
+function runPowerShell(script) {
+  const encodedCommand = Buffer.from(script, 'utf16le').toString('base64');
+  const candidates = ['pwsh', 'powershell.exe'];
+
+  for (const executable of candidates) {
+    const result = spawnSync(executable, ['-NoProfile', '-EncodedCommand', encodedCommand], {
+      encoding: 'utf8',
+      windowsHide: true,
+    });
+    if (!result.error && result.status === 0) {
+      return result.stdout.trim();
+    }
+  }
+
+  throw new Error('Failed to run PowerShell for Chromium DPAPI decryption');
+}
+
+function getMasterKey() {
+  if (cachedMasterKey) {
+    return cachedMasterKey;
+  }
+
+  const localState = getLocalStatePayload();
+  const encryptedKeyBase64 = localState?.os_crypt?.encrypted_key;
+  if (!encryptedKeyBase64) {
+    throw new Error('Chromium master key missing from Local State');
+  }
+
+  const encryptedKey = Buffer.from(encryptedKeyBase64, 'base64');
+  const prefix = encryptedKey.subarray(0, 5).toString('utf8');
+  if (prefix !== 'DPAPI') {
+    throw new Error(`Unsupported Chromium key prefix: ${prefix || 'unknown'}`);
+  }
+
+  const dpapiPayload = encryptedKey.subarray(5);
+  const pwshScript =
+    `[Convert]::ToBase64String(` +
+    `[System.Security.Cryptography.ProtectedData]::Unprotect(` +
+    `[Convert]::FromBase64String('${dpapiPayload.toString('base64')}'), ` +
+    `$null, ` +
+    `[System.Security.Cryptography.DataProtectionScope]::CurrentUser))`;
+  cachedMasterKey = Buffer.from(runPowerShell(pwshScript), 'base64');
+  if (!cachedMasterKey.length) {
+    throw new Error('Chromium master key was empty');
+  }
+
+  return cachedMasterKey;
+}
+
+function copyCookiesDbForRead() {
+  if (!fs.existsSync(COOKIES_DB_PATH)) {
+    throw new Error(`Claude helper cookies DB not found at ${COOKIES_DB_PATH}`);
+  }
+
+  const tempPath = path.join(os.tmpdir(), `tm-claude-cookies-${process.pid}-${Date.now()}.sqlite`);
+  try {
+    fs.copyFileSync(COOKIES_DB_PATH, tempPath);
+  } catch (error) {
+    if (error && (error.code === 'EPERM' || error.code === 'EBUSY')) {
+      throw new Error('Claude helper browser profile is still in use. Close the helper browser window and retry.');
+    }
+    throw error;
+  }
+
+  return tempPath;
+}
+
+function decryptCookieValue(encryptedValue, hostKey, masterKey) {
+  if (!encryptedValue || !encryptedValue.length) {
+    return '';
+  }
+
+  const payload = Buffer.from(encryptedValue);
+  const version = payload.subarray(0, 3).toString('utf8');
+  if (version !== 'v10' && version !== 'v11') {
+    throw new Error(`Unsupported Chromium cookie version: ${version || 'unknown'}`);
+  }
+
+  const nonce = payload.subarray(3, 15);
+  const ciphertext = payload.subarray(15, payload.length - 16);
+  const authTag = payload.subarray(payload.length - 16);
+  const decipher = crypto.createDecipheriv('aes-256-gcm', masterKey, nonce);
+  decipher.setAuthTag(authTag);
+
+  let plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  const hostHash = crypto.createHash('sha256').update(hostKey).digest();
+  if (plaintext.length >= 32 && plaintext.subarray(0, 32).equals(hostHash)) {
+    plaintext = plaintext.subarray(32);
+  }
+
+  return plaintext.toString('utf8');
+}
+
+function loadClaudeCookies() {
+  const masterKey = getMasterKey();
+  const tempDbPath = copyCookiesDbForRead();
+
+  try {
+    const database = new DatabaseSync(tempDbPath, { readonly: true });
+    try {
+      const rows = database
+        .prepare(
+          `select host_key, name, value, encrypted_value
+           from cookies
+           where host_key like '%claude.ai%'
+           order by case when host_key = '.claude.ai' then 0 else 1 end, name`,
+        )
+        .all();
+
+      const cookieMap = new Map();
+      for (const row of rows) {
+        if (cookieMap.has(row.name)) {
+          continue;
+        }
+
+        let value = row.value || '';
+        if (!value) {
+          value = decryptCookieValue(row.encrypted_value, row.host_key, masterKey);
+        }
+
+        if (value) {
+          cookieMap.set(row.name, value);
+        }
+      }
+
+      if (!cookieMap.has('sessionKey')) {
+        throw new Error('Claude helper session cookie not found. Run login again.');
+      }
+
+      return cookieMap;
+    } finally {
+      database.close();
+    }
+  } finally {
+    try {
+      fs.unlinkSync(tempDbPath);
+    } catch {
+      // ignore temp cleanup failure
+    }
+  }
+}
+
+function buildCookieHeader(cookieMap) {
+  return Array.from(cookieMap.entries())
+    .map(([name, value]) => `${name}=${value}`)
+    .join('; ');
+}
+
+async function fetchJsonWithCookies(url, cookieHeader) {
+  const response = await fetch(url, {
+    headers: {
+      accept: 'application/json',
+      cookie: cookieHeader,
+      origin: 'https://claude.ai',
+      referer: 'https://claude.ai/',
+      'user-agent': USER_AGENT,
+    },
   });
 
-  const contextOptions = {
-    userAgent: USER_AGENT,
-  };
-
-  if (fs.existsSync(AUTH_STATE_PATH)) {
-    contextOptions.storageState = AUTH_STATE_PATH;
-  }
-
-  const context = await browser.newContext(contextOptions);
-  const page = await context.newPage();
-  return { browser, context, page };
-}
-
-async function fetchJsonViaPage(page, url) {
-  const result = await page.evaluate(async (targetUrl) => {
-    const response = await fetch(targetUrl, {
-      credentials: 'include',
-      headers: {
-        accept: 'application/json',
-      },
-    });
-    const text = await response.text();
-    return {
-      ok: response.ok,
-      status: response.status,
-      text,
-    };
-  }, url);
-
-  if (!result.ok) {
-    const error = new Error(`HTTP ${result.status}`);
+  const text = await response.text();
+  if (!response.ok) {
+    const error = new Error(`HTTP ${response.status}`);
     error.code = 'HTTP_ERROR';
-    error.httpStatus = result.status;
-    error.body = result.text;
+    error.httpStatus = response.status;
+    error.body = text;
     throw error;
   }
 
-  if (!isProbablyJson(result.text)) {
-    const error = new Error(`Non-JSON response: ${classifyBody(result.text)}`);
+  if (!isProbablyJson(text)) {
+    const error = new Error(`Non-JSON response: ${classifyBody(text)}`);
     error.code = 'NON_JSON';
-    error.body = result.text;
+    error.body = text;
     throw error;
   }
 
-  return JSON.parse(result.text);
+  return JSON.parse(text);
 }
 
-async function fetchUsageSnapshot({ headless }) {
-  const { browser, context, page } = await createBrowserContext({ headless });
-  try {
-    await page.goto('https://claude.ai', { waitUntil: 'domcontentloaded', timeout: 30000 });
-    const organizations = await fetchJsonViaPage(page, 'https://claude.ai/api/organizations');
-    if (!Array.isArray(organizations) || organizations.length === 0) {
-      throw new Error('No Claude organizations available');
+function pickClaudeOrganization(organizations, lastActiveOrg) {
+  if (lastActiveOrg) {
+    const activeOrganization = organizations.find(
+      (organization) => organization?.uuid === lastActiveOrg || String(organization?.id) === String(lastActiveOrg),
+    );
+    if (activeOrganization) {
+      return activeOrganization;
     }
-
-    const organization = organizations[0];
-    const organizationId = organization.uuid || organization.id;
-    if (!organizationId) {
-      throw new Error('Organization id not found');
-    }
-
-    const usage = await fetchJsonViaPage(page, `https://claude.ai/api/organizations/${organizationId}/usage`);
-    const payload = normalizeUsagePayload(usage);
-    await context.storageState({ path: AUTH_STATE_PATH });
-    return { organizationId, payload };
-  } finally {
-    await context.close();
-    await browser.close();
   }
+
+  return (
+    organizations.find((organization) => Array.isArray(organization?.capabilities) && organization.capabilities.includes('chat')) ||
+    organizations.find((organization) => typeof organization?.rate_limit_tier === 'string' && organization.rate_limit_tier.includes('claude')) ||
+    organizations[0]
+  );
+}
+
+async function fetchUsageSnapshot() {
+  const cookies = loadClaudeCookies();
+  const cookieHeader = buildCookieHeader(cookies);
+  const organizations = await fetchJsonWithCookies('https://claude.ai/api/organizations', cookieHeader);
+  if (!Array.isArray(organizations) || organizations.length === 0) {
+    throw new Error('No Claude organizations available');
+  }
+
+  const organization = pickClaudeOrganization(organizations, cookies.get('lastActiveOrg'));
+  const organizationId = organization?.uuid || organization?.id;
+  if (!organizationId) {
+    throw new Error('Organization id not found');
+  }
+
+  const usage = await fetchJsonWithCookies(`https://claude.ai/api/organizations/${organizationId}/usage`, cookieHeader);
+  const payload = normalizeUsagePayload(usage);
+  return { organizationId, organizationName: organization?.name || null, payload };
 }
 
 function classifyError(error) {
@@ -201,6 +350,12 @@ function classifyError(error) {
   if (error && error.httpStatus === 429) {
     return 'rate_limited';
   }
+  if (message.includes('browser profile is still in use')) {
+    return 'profile_in_use';
+  }
+  if (message.includes('session cookie not found')) {
+    return 'login_required';
+  }
   if (message.includes('cloudflare_blocked') || message.includes('cloudflare_challenge')) {
     return 'cloudflare_blocked';
   }
@@ -210,19 +365,20 @@ function classifyError(error) {
   return 'request_failed';
 }
 
-async function writeUsagePayload(payload, organizationId) {
+async function writeUsagePayload(payload, organizationId, organizationName) {
   await ensureBaseDir();
   await atomicWriteJson(USAGE_CACHE_PATH, payload);
   await writeStatus('ok', {
     organization_id: organizationId,
+    organization_name: organizationName,
     usage_path: USAGE_CACHE_PATH,
   });
 }
 
-async function runOnce({ headless }) {
+async function runOnce() {
   try {
-    const { organizationId, payload } = await fetchUsageSnapshot({ headless });
-    await writeUsagePayload(payload, organizationId);
+    const { organizationId, organizationName, payload } = await fetchUsageSnapshot();
+    await writeUsagePayload(payload, organizationId, organizationName);
     console.log(`Claude helper updated ${USAGE_CACHE_PATH}`);
     return 0;
   } catch (error) {
@@ -238,50 +394,30 @@ async function runOnce({ headless }) {
 
 async function runLogin() {
   await ensureBaseDir();
-  const { browser, context, page } = await createBrowserContext({ headless: false });
-  try {
-    await page.goto('https://claude.ai/login', { waitUntil: 'domcontentloaded', timeout: 30000 });
-    console.log('Complete the Claude login in the opened browser window.');
-    console.log('The helper will save auth state and close automatically after a successful usage fetch.');
+  await ensureProfileDir();
 
-    const deadline = Date.now() + 10 * 60 * 1000;
-    while (Date.now() < deadline) {
-      if (page.isClosed()) {
-        throw new Error('Login window closed before authentication completed');
-      }
-
-      try {
-        const organizations = await fetchJsonViaPage(page, 'https://claude.ai/api/organizations');
-        if (Array.isArray(organizations) && organizations.length > 0) {
-          const organization = organizations[0];
-          const organizationId = organization.uuid || organization.id;
-          const usage = await fetchJsonViaPage(page, `https://claude.ai/api/organizations/${organizationId}/usage`);
-          const payload = normalizeUsagePayload(usage);
-          await context.storageState({ path: AUTH_STATE_PATH });
-          await writeUsagePayload(payload, organizationId);
-          console.log(`Claude login complete. Auth saved to ${AUTH_STATE_PATH}`);
-          return 0;
-        }
-      } catch (error) {
-        const state = classifyError(error);
-        await writeStatus(state, {
-          error: error && error.message ? error.message : String(error),
-        });
-      }
-
-      await delay(2000);
-    }
-
-    throw new Error('Login timed out after 10 minutes');
-  } finally {
-    await context.close();
-    await browser.close();
+  const executablePath = getBrowserPath();
+  if (!executablePath) {
+    throw new Error('Browser executable not found. Set CLAUDE_WEB_HELPER_BROWSER.');
   }
+
+  spawn(executablePath, [`--user-data-dir=${PROFILE_DIR}`, '--new-window', 'https://claude.ai/login'], {
+    detached: true,
+    stdio: 'ignore',
+  }).unref();
+
+  await writeStatus('login_browser_opened', {
+    profile_dir: PROFILE_DIR,
+  });
+
+  console.log('Opened a normal browser window for Claude login.');
+  console.log('Complete the login there, then close that helper browser window before running once/watch.');
+  return 0;
 }
 
 async function runWatch() {
   while (true) {
-    await runOnce({ headless: true });
+    await runOnce();
     await delay(DEFAULT_REFRESH_MS);
   }
 }
@@ -292,7 +428,7 @@ async function main() {
       process.exitCode = await runLogin();
       break;
     case 'once':
-      process.exitCode = await runOnce({ headless: true });
+      process.exitCode = await runOnce();
       break;
     case 'watch':
       await runWatch();

@@ -12,14 +12,12 @@ if (-not (Test-Path (Join-Path $helperDir 'package.json'))) {
 
 Push-Location $helperDir
 try {
-    if (-not (Test-Path (Join-Path $helperDir 'node_modules\playwright-core'))) {
-        npm install
-        if ($LASTEXITCODE -ne 0) {
-            throw 'npm install failed'
-        }
+    node -p "require('node:sqlite'); 'ok'" *> $null
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Node.js 22+ with node:sqlite support is required for the Claude web helper.'
     }
 
-    node index.mjs $Mode
+    node --disable-warning=ExperimentalWarning index.mjs $Mode
     exit $LASTEXITCODE
 }
 finally {

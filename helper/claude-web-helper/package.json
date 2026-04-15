@@ -8,8 +8,5 @@
     "login": "node index.mjs login",
     "once": "node index.mjs once",
     "watch": "node index.mjs watch"
-  },
-  "dependencies": {
-    "playwright-core": "^1.59.1"
   }
 }
