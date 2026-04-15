@@ -9,6 +9,16 @@ Versioning and release notes are tracked in [CHANGELOG.md](CHANGELOG.md).
 - Claude and Codex account usage
 - Claude tries the OAuth usage endpoint first, then falls back to the freshest available local cache or optional Claude Code statusline bridge data
 
+## Runtime compatibility
+
+- Windows TrafficMonitor plugin DLL only
+- TrafficMonitor plugin API v7
+- Use the plugin DLL that matches the installed TrafficMonitor architecture:
+  - `x64` plugin for `x64` TrafficMonitor
+  - `x86` plugin for `x86` TrafficMonitor
+- Official release assets are currently provided for `x64` and `x86`
+- TrafficMonitor itself is not bundled by this repo
+
 ## What the plugin shows
 
 - `C5h`: current 5-hour usage percentage
@@ -55,16 +65,31 @@ Refresh behavior:
 - Codex success refresh: 60 seconds
 - Codex failure retry: 5 seconds
 
-## Requirements
+## Install for TrafficMonitor users
+
+1. Install the official TrafficMonitor release separately.
+2. Download the plugin asset that matches your TrafficMonitor architecture:
+   - `ClaudeUsagePlugin_v*_x64.zip` for `x64` TrafficMonitor
+   - `ClaudeUsagePlugin_v*_x86.zip` for `x86` TrafficMonitor
+3. Copy `ClaudeUsagePlugin.dll` into the TrafficMonitor `plugins` directory.
+   - Example: if TrafficMonitor is unpacked at `D:\Apps\TrafficMonitor`, copy the DLL to `D:\Apps\TrafficMonitor\plugins\ClaudeUsagePlugin.dll`
+4. Restart TrafficMonitor.
+5. Open plug-in management and confirm `Claude/Codex Usage` is loaded.
+6. Enable `Claude 5h`, `Claude 7d`, `Codex 5h`, `Codex 7d` in the displayed items list.
+
+If the plug-in loads but the items do not appear, check the DLL architecture first. An `x64` DLL will not load into `x86` TrafficMonitor, and vice versa.
+This repo and its releases ship only the plug-in DLL, not TrafficMonitor itself.
+
+## Build requirements
 
 - Windows
 - Visual Studio 2022 or Build Tools 2022
 - Desktop development with C++
-- MFC for v143 toolset
-- Windows 10 SDK
-- Official TrafficMonitor installed separately
+- MSVC `v143` toolset
+- MFC for the `v143` toolset (`UseOfMfc=Dynamic`)
+- Windows 10 SDK / compatible Windows SDK selected by Visual Studio
 
-## Build
+## Build from source
 
 Open [ClaudeUsagePlugin.sln](ClaudeUsagePlugin.sln) in Visual Studio and build `Release|x64` or `Release|Win32`, or run:
 
@@ -77,15 +102,17 @@ Build output:
 - `build\x64\Release\plugins\ClaudeUsagePlugin.dll`
 - `build\Release\plugins\ClaudeUsagePlugin.dll` for `Release|Win32`
 
-## Install
+The project file also contains `ARM64EC` configurations, but the published release assets are currently only `x64` and `x86`.
 
-1. Install the official TrafficMonitor release.
-2. Build this repository.
-3. Copy `build\x64\Release\plugins\ClaudeUsagePlugin.dll` into the TrafficMonitor `plugins` directory.
-4. Restart TrafficMonitor.
-5. Enable `Claude 5h`, `Claude 7d`, `Codex 5h`, `Codex 7d` in the displayed items list.
+## Environment and path assumptions
 
-This repo only ships the plugin DLL. It does not bundle TrafficMonitor itself.
+- TrafficMonitor runs on Windows, so every runtime path must be readable from Windows.
+- Claude API auth uses `%USERPROFILE%\.claude\.credentials.json` by default.
+- `CLAUDE_CONFIG_DIR` is supported, but it must point to a Windows-readable directory. A Linux-only WSL path such as `/home/<user>/.claude` will not work for the Windows plugin process.
+- Codex state uses `%USERPROFILE%\.codex` by default.
+- `CODEX_HOME` is supported, but it must be visible to the Windows TrafficMonitor process. Setting `CODEX_HOME` only inside WSL is not enough unless TrafficMonitor inherits an equivalent Windows-side path.
+- WSL-style `/mnt/c/...` paths are accepted only when they resolve back to Windows storage.
+- If you override `CLAUDE_CONFIG_DIR` or `CODEX_HOME`, set them in the Windows environment before launching TrafficMonitor. WSL-only shell exports are not visible to the plugin.
 
 ## Optional Claude statusline bridge
 
@@ -111,6 +138,7 @@ This wrapper:
 - Reads the official Claude Code statusline JSON from stdin
 - Writes `rate_limits` to `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-statusline.json`
 - Forwards the same stdin payload to `bunx -y ccstatusline@latest`, so the existing `ccstatusline` output keeps working
+- Requires `bunx` to be available on Windows if you want the forwarded `ccstatusline` output
 - The bridge becomes usable only after Claude Code has produced at least one response with `rate_limits`; until then the plugin continues to rely on the OAuth usage API
 
 WSL Claude Code:
@@ -131,6 +159,29 @@ WSL Claude Code:
 ```
 
 The WSL wrapper writes the cache into the Windows-readable `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin` path through `/mnt/c/...`, then forwards stdin to `npx -y ccstatusline@2.2.7`.
+
+WSL bridge prerequisites:
+
+- `python3`
+- `npx`
+- `cmd.exe` and `wslpath` available from WSL
+- Claude Code restarted after changing `~/.claude/settings.json`
+
+## Codex setup
+
+- By default no extra setup is needed if Codex writes to `%USERPROFILE%\.codex` on Windows.
+- If your Codex state lives somewhere else, set `CODEX_HOME` in the Windows environment seen by TrafficMonitor.
+- If you use Codex through WSL, make sure the actual log and session files are stored on Windows-readable storage such as `/mnt/c/...`.
+
+## Verification
+
+After installation or setup, check the following:
+
+1. TrafficMonitor plug-in management shows `Claude/Codex Usage`.
+2. Display settings lists `Claude 5h`, `Claude 7d`, `Codex 5h`, `Codex 7d`.
+3. The taskbar items show percentages instead of `--`.
+4. The tooltip shows reset timing for any source that exposes reset metadata.
+5. If you enabled the Claude statusline bridge, `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-statusline.json` updates after a Claude Code response.
 
 ## Constraints
 
@@ -154,10 +205,13 @@ The WSL wrapper writes the cache into the Windows-readable `%LOCALAPPDATA%\traff
 - `Claude access token not found`:
   Claude is not signed in locally, or the credential file location changed.
 
-- `Claude login required`:
-  The token is expired or no longer accepted by the API.
+- `Claude usage API HTTP 401 (login required)`:
+  The current Windows-side Claude OAuth token is expired or no longer accepted by the API.
 
-- `Claude usage API rate limited`:
+- `Claude usage API HTTP 403 (access denied)`:
+  The token was found, but the API refused the request for that account or org context.
+
+- `Claude usage API HTTP 429 rate limited`:
   The endpoint rejected requests temporarily. The plugin will wait until `Retry-After` and may show the freshest available local Claude snapshot while backoff is active.
 
 - Claude values do not match the Claude Code UI:
@@ -170,7 +224,7 @@ The WSL wrapper writes the cache into the Windows-readable `%LOCALAPPDATA%\traff
   Network, TLS, or endpoint reachability failed. Cached Claude values may still be shown if a usable cache exists.
 
 - `Codex config directory not found`:
-  `CODEX_HOME` or `%USERPROFILE%\.codex` could not be resolved.
+  `CODEX_HOME` or `%USERPROFILE%\.codex` could not be resolved from the Windows TrafficMonitor process.
 
 - `Codex logs_2.sqlite unavailable`:
   The local Codex SQLite store exists but could not be read.
