@@ -321,16 +321,24 @@ bool UnixSecondsToLocalText(long long unix_seconds, std::wstring& text)
     if (!SystemTimeToTzSpecificLocalTime(nullptr, &utc_time, &local_time))
         return false;
 
-    wchar_t buffer[32];
-    swprintf_s(
-        buffer,
-        L"%04u-%02u-%02u %02u:%02u",
-        static_cast<unsigned>(local_time.wYear),
-        static_cast<unsigned>(local_time.wMonth),
-        static_cast<unsigned>(local_time.wDay),
-        static_cast<unsigned>(local_time.wHour),
-        static_cast<unsigned>(local_time.wMinute));
-    text = buffer;
+    const int date_length = GetDateFormatEx(LOCALE_NAME_USER_DEFAULT, 0, &local_time, nullptr, nullptr, 0, nullptr);
+    if (date_length <= 1)
+        return false;
+
+    const int time_length = GetTimeFormatEx(LOCALE_NAME_USER_DEFAULT, 0, &local_time, nullptr, nullptr, 0);
+    if (time_length <= 1)
+        return false;
+
+    std::wstring date_text(static_cast<size_t>(date_length - 1), L'\0');
+    std::wstring time_text(static_cast<size_t>(time_length - 1), L'\0');
+    if (GetDateFormatEx(LOCALE_NAME_USER_DEFAULT, 0, &local_time, nullptr, &date_text[0], date_length, nullptr) == 0)
+        return false;
+    if (GetTimeFormatEx(LOCALE_NAME_USER_DEFAULT, 0, &local_time, nullptr, &time_text[0], time_length) == 0)
+        return false;
+
+    text = date_text;
+    text += L" ";
+    text += time_text;
     return true;
 }
 
