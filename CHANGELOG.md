@@ -2,11 +2,15 @@
 
 ## Unreleased
 
+## 0.3.1 - 2026-04-15
+
 ### Changed
 - Claude usage now uses only the plugin's own cached API snapshot as the Claude fallback source.
 - Claude now prefers an official Claude Code statusline bridge cache when configured, with the OAuth usage endpoint retained as fallback.
 - Claude local cache and statusline bridge files now live under `trafficmonitor-claude-usage-plugin`, with backward-compatible reads from the previous `trafficmonitor-ai-usage-plugin` path.
 - Added a WSL Claude Code statusline wrapper path so WSL sessions can write the Windows-readable Claude bridge cache directly.
+- Tooltips no longer expose internal `Source:` labels.
+- Claude and Codex usage bars now keep one color family per provider, with a slightly stronger tone for `5h` than `7d`.
 
 ### Fixed
 - Claude usage polling now respects `Retry-After` when the Anthropic usage API returns `429 rate limited`, instead of retrying every 5 seconds.
@@ -14,6 +18,7 @@
 - Claude and Codex reset timestamps in tooltips now follow the Windows user locale date/time format instead of a fixed `YYYY-MM-DD HH:MM` string.
 - Fresh Claude statusline bridge cache can now be picked up immediately even while the OAuth API is still in `Retry-After` backoff.
 - Fresh Claude statusline bridge cache is now re-read every 5 seconds instead of waiting for the 180 second OAuth success interval.
+- Codex tooltip reset timestamps now parse the current local `reset_at` field emitted by Codex websocket rate-limit events.
 
 ## 0.3.0 - 2026-04-15
 
