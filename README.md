@@ -22,11 +22,18 @@ Versioning and release notes are tracked in [CHANGELOG.md](CHANGELOG.md).
 - Reads Codex usage from local Windows-readable state with `CODEX_HOME` support
 - Displays reset timing in tooltips when the upstream source exposes it
 
+## About TrafficMonitor
+
+[TrafficMonitor](https://github.com/zhongyang219/TrafficMonitor) is a Windows system monitor that can show network speed, CPU, and memory in a floating window or directly in the taskbar.
+`ClaudeUsagePlugin.dll` extends that taskbar window through TrafficMonitor's plug-in system, so this repository ships only the plug-in DLL and expects an official TrafficMonitor installation.
+
+If you do not need TrafficMonitor's temperature monitoring features, the official Lite release is usually enough for this plug-in workflow.
+
 ## Getting Started
 
 1. Install the official TrafficMonitor release and choose the same architecture as the plugin DLL you plan to use.
 2. Copy `ClaudeUsagePlugin.dll` into the TrafficMonitor `plugins` directory, then restart TrafficMonitor.
-3. In TrafficMonitor, enable `Claude 5h`, `Claude 7d`, `Codex 5h`, and `Codex 7d` from the displayed items list.
+3. Open TrafficMonitor's taskbar window and enable `Claude 5h`, `Claude 7d`, `Codex 5h`, and `Codex 7d`.
 4. If you want Claude values to track the Claude web dashboard more closely, run:
 
 ```powershell
@@ -37,6 +44,57 @@ powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 watch
 5. If your Codex data does not live in `%USERPROFILE%\.codex`, set `CODEX_HOME` in the Windows environment before launching TrafficMonitor.
 
 After setup, the taskbar should show `C5h`, `C7d`, `X5h`, and `X7d`, and the tooltip should show reset timing when that source exposes it.
+
+## Enable the TrafficMonitor taskbar items
+
+1. Start TrafficMonitor. You should see its floating monitor window and its tray icon.
+
+<p align="center">
+  <img src="docs/images/trafficmonitor-tray-icon.png" alt="TrafficMonitor floating window and tray icon" />
+</p>
+
+2. Right-click the TrafficMonitor tray icon or floating window, then choose `Show Taskbar Window`.
+
+<p align="center">
+  <img src="docs/images/trafficmonitor-tray-menu-show-taskbar.png" alt="TrafficMonitor tray context menu with Show Taskbar Window" />
+</p>
+
+3. A TrafficMonitor taskbar widget will appear. Right-click that taskbar widget, then choose `Display Settings...`.
+
+<p align="center">
+  <img src="docs/images/trafficmonitor-taskbar-menu-display-settings.png" alt="TrafficMonitor taskbar context menu with Display Settings" />
+</p>
+
+4. In `Display settings`, check `Claude 5h`, `Claude 7d`, `Codex 5h`, and `Codex 7d`, then click `OK`.
+
+<p align="center">
+  <img src="docs/images/trafficmonitor-display-settings.png" alt="TrafficMonitor Display settings with Claude and Codex usage items enabled" />
+</p>
+
+5. The taskbar widget should now show `C5h`, `C7d`, `X5h`, and `X7d`.
+
+<p align="center">
+  <img src="docs/images/trafficmonitor-taskbar-compact.png" alt="TrafficMonitor taskbar widget showing Claude and Codex usage bars" />
+</p>
+
+## Optional Claude web helper quick setup
+
+If the built-in Claude OAuth usage endpoint is rate-limited or if you want values closer to the Claude web dashboard, use the optional Claude web helper.
+
+1. Run the one-time login command:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 login
+```
+
+2. When the helper browser opens, sign in at `claude.ai`, then close that helper browser window.
+3. Start the background refresh loop:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 watch
+```
+
+The helper writes `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-usage.json`, and the plug-in prefers that fresh snapshot when it is available.
 
 ## Scope
 
