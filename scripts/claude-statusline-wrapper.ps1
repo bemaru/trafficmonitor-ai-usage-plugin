@@ -3,11 +3,11 @@ $ErrorActionPreference = 'Stop'
 
 function Get-PluginCacheDir {
     if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
-        return [System.IO.Path]::Combine($env:LOCALAPPDATA, 'trafficmonitor-ai-usage-plugin')
+        return [System.IO.Path]::Combine($env:LOCALAPPDATA, 'trafficmonitor-claude-usage-plugin')
     }
 
     if (-not [string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
-        return [System.IO.Path]::Combine($env:USERPROFILE, '.cache', 'trafficmonitor-ai-usage-plugin')
+        return [System.IO.Path]::Combine($env:USERPROFILE, '.cache', 'trafficmonitor-claude-usage-plugin')
     }
 
     return $null

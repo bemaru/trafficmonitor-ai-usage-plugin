@@ -22,7 +22,7 @@ Tooltip text also shows reset timing when the upstream data exposes it.
 
 Claude usage:
 
-- Prefers a local Claude Code statusline bridge cache at `%LOCALAPPDATA%\trafficmonitor-ai-usage-plugin\claude-statusline.json` when available
+- Prefers a local Claude Code statusline bridge cache at `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-statusline.json` when available
 - The included `scripts\claude-statusline-wrapper.ps1` keeps `ccstatusline` working while also writing that bridge cache
 - Reads the local Claude OAuth access token from `%USERPROFILE%\.claude\.credentials.json`
 - Or from `CLAUDE_CONFIG_DIR\.credentials.json` if `CLAUDE_CONFIG_DIR` is set
@@ -106,8 +106,9 @@ If you use Claude Code on the same Windows account, the preferred Claude source 
 This wrapper:
 
 - Reads the official Claude Code statusline JSON from stdin
-- Writes `rate_limits` to `%LOCALAPPDATA%\trafficmonitor-ai-usage-plugin\claude-statusline.json`
+- Writes `rate_limits` to `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-statusline.json`
 - Forwards the same stdin payload to `bunx -y ccstatusline@latest`, so the existing `ccstatusline` output keeps working
+- The bridge becomes usable only after Claude Code has produced at least one response with `rate_limits`; until then the plugin falls back to the OAuth usage API
 
 ## Constraints
 
@@ -115,6 +116,7 @@ This wrapper:
 - The Claude OAuth usage endpoint used as fallback is undocumented and may change.
 - Claude cached fallback values come only from the plugin's own last successful API snapshot and can be stale when the live API is unavailable.
 - The Claude statusline bridge only updates while Claude Code is running and emitting statusline payloads.
+- After changing the `statusLine` command, open Claude Code and get at least one assistant response so the bridge cache is created.
 - Codex usage currently comes from local Codex state, not an official OpenAI usage API.
 - Codex values update only after Codex itself writes fresh rate-limit data locally.
 - This is best-effort integration, not an official Anthropic integration surface.
@@ -137,7 +139,7 @@ This wrapper:
   The endpoint rejected requests temporarily. The plugin will wait until `Retry-After` and may show the plugin's most recent Claude cache if available.
 
 - Claude values do not match the Claude Code UI:
-  Verify that the statusline wrapper is installed, Claude Code is actually running, and `%LOCALAPPDATA%\trafficmonitor-ai-usage-plugin\claude-statusline.json` is updating.
+  Verify that the statusline wrapper is installed, Claude Code is actually running, and `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-statusline.json` is updating.
 
 - `Claude usage API returned unexpected data`:
   The response schema changed and the plugin needs an update.

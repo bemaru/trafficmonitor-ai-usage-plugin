@@ -23,7 +23,8 @@ constexpr unsigned long long MAX_JSON_FILE_SIZE = 1024ULL * 1024ULL;
 constexpr wchar_t USAGE_API_HOST[] = L"api.anthropic.com";
 constexpr wchar_t USAGE_API_PATH[] = L"/api/oauth/usage";
 constexpr wchar_t USAGE_API_BETA_HEADER[] = L"oauth-2025-04-20";
-constexpr wchar_t PLUGIN_CACHE_DIR_NAME[] = L"trafficmonitor-ai-usage-plugin";
+constexpr wchar_t PLUGIN_CACHE_DIR_NAME[] = L"trafficmonitor-claude-usage-plugin";
+constexpr wchar_t LEGACY_PLUGIN_CACHE_DIR_NAME[] = L"trafficmonitor-ai-usage-plugin";
 constexpr wchar_t PLUGIN_CACHE_FILE_NAME[] = L"claude-usage.json";
 constexpr wchar_t STATUSLINE_CACHE_FILE_NAME[] = L"claude-statusline.json";
 
@@ -68,33 +69,54 @@ struct UsageCacheCandidate
     unsigned long long last_write_time_ms{};
 };
 
-std::wstring GetPluginCacheDir()
+std::wstring GetCacheDirByName(const wchar_t* dir_name)
 {
     const std::wstring local_app_data = TrimString(GetEnvVar(L"LOCALAPPDATA"));
     if (!local_app_data.empty())
-        return JoinPath(local_app_data, PLUGIN_CACHE_DIR_NAME);
+        return JoinPath(local_app_data, dir_name);
 
     const std::wstring home = TrimString(GetEnvVar(L"USERPROFILE"));
     if (home.empty())
         return std::wstring();
 
-    return JoinPath(JoinPath(home, L".cache"), PLUGIN_CACHE_DIR_NAME);
+    return JoinPath(JoinPath(home, L".cache"), dir_name);
+}
+
+std::wstring GetPluginCacheDir()
+{
+    return GetCacheDirByName(PLUGIN_CACHE_DIR_NAME);
+}
+
+std::wstring GetLegacyPluginCacheDir()
+{
+    return GetCacheDirByName(LEGACY_PLUGIN_CACHE_DIR_NAME);
+}
+
+std::wstring BuildCachePath(const std::wstring& cache_dir, const wchar_t* file_name)
+{
+    if (cache_dir.empty())
+        return std::wstring();
+    return JoinPath(cache_dir, file_name);
 }
 
 std::wstring GetPluginCachePath()
 {
-    const std::wstring cache_dir = GetPluginCacheDir();
-    if (cache_dir.empty())
-        return std::wstring();
-    return JoinPath(cache_dir, PLUGIN_CACHE_FILE_NAME);
+    return BuildCachePath(GetPluginCacheDir(), PLUGIN_CACHE_FILE_NAME);
+}
+
+std::wstring GetLegacyPluginCachePath()
+{
+    return BuildCachePath(GetLegacyPluginCacheDir(), PLUGIN_CACHE_FILE_NAME);
 }
 
 std::wstring GetStatuslineCachePath()
 {
-    const std::wstring cache_dir = GetPluginCacheDir();
-    if (cache_dir.empty())
-        return std::wstring();
-    return JoinPath(cache_dir, STATUSLINE_CACHE_FILE_NAME);
+    return BuildCachePath(GetPluginCacheDir(), STATUSLINE_CACHE_FILE_NAME);
+}
+
+std::wstring GetLegacyStatuslineCachePath()
+{
+    return BuildCachePath(GetLegacyPluginCacheDir(), STATUSLINE_CACHE_FILE_NAME);
 }
 
 bool FileExists(const std::wstring& path)
@@ -851,7 +873,15 @@ bool TryLoadCachedUsageSnapshot(CClaudeUsageData::Snapshot& snapshot, bool requi
     {
         unsigned long long last_write_time_ms{};
         if (GetFileLastWriteTimeMs(statusline_cache_path, last_write_time_ms))
-            candidates.push_back(UsageCacheCandidate{ statusline_cache_path, L"Claude Code statusline", 2, last_write_time_ms });
+            candidates.push_back(UsageCacheCandidate{ statusline_cache_path, L"Claude Code statusline", 4, last_write_time_ms });
+    }
+
+    const std::wstring legacy_statusline_cache_path = GetLegacyStatuslineCachePath();
+    if (!legacy_statusline_cache_path.empty() && FileExists(legacy_statusline_cache_path))
+    {
+        unsigned long long last_write_time_ms{};
+        if (GetFileLastWriteTimeMs(legacy_statusline_cache_path, last_write_time_ms))
+            candidates.push_back(UsageCacheCandidate{ legacy_statusline_cache_path, L"Claude Code statusline", 3, last_write_time_ms });
     }
 
     const std::wstring plugin_cache_path = GetPluginCachePath();
@@ -859,7 +889,15 @@ bool TryLoadCachedUsageSnapshot(CClaudeUsageData::Snapshot& snapshot, bool requi
     {
         unsigned long long last_write_time_ms{};
         if (GetFileLastWriteTimeMs(plugin_cache_path, last_write_time_ms))
-            candidates.push_back(UsageCacheCandidate{ plugin_cache_path, L"Claude usage cache", 1, last_write_time_ms });
+            candidates.push_back(UsageCacheCandidate{ plugin_cache_path, L"Claude usage cache", 2, last_write_time_ms });
+    }
+
+    const std::wstring legacy_plugin_cache_path = GetLegacyPluginCachePath();
+    if (!legacy_plugin_cache_path.empty() && FileExists(legacy_plugin_cache_path))
+    {
+        unsigned long long last_write_time_ms{};
+        if (GetFileLastWriteTimeMs(legacy_plugin_cache_path, last_write_time_ms))
+            candidates.push_back(UsageCacheCandidate{ legacy_plugin_cache_path, L"Claude usage cache", 1, last_write_time_ms });
     }
 
     if (candidates.empty())
