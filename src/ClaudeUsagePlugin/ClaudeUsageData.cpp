@@ -19,7 +19,8 @@ constexpr unsigned long long RETRY_INTERVAL_MS = 30ULL * 1000ULL;
 constexpr unsigned long long STATUSLINE_REFRESH_INTERVAL_MS = 5ULL * 1000ULL;
 constexpr unsigned long long RATE_LIMIT_RETRY_FALLBACK_MS = 5ULL * 60ULL * 1000ULL;
 constexpr unsigned long long MAX_RETRY_AFTER_MS = 12ULL * 60ULL * 60ULL * 1000ULL;
-constexpr unsigned long long CACHE_MAX_AGE_MS = 180ULL * 1000ULL;
+constexpr unsigned long long PLUGIN_CACHE_MAX_AGE_MS = 180ULL * 1000ULL;
+constexpr unsigned long long STATUSLINE_CACHE_MAX_AGE_MS = 60ULL * 1000ULL;
 constexpr unsigned long long MAX_JSON_FILE_SIZE = 1024ULL * 1024ULL;
 constexpr wchar_t USAGE_API_HOST[] = L"api.anthropic.com";
 constexpr wchar_t USAGE_API_PATH[] = L"/api/oauth/usage";
@@ -68,6 +69,7 @@ struct UsageCacheCandidate
     std::wstring source_text;
     int priority{};
     unsigned long long last_write_time_ms{};
+    unsigned long long max_age_ms{};
 };
 
 std::wstring GetCacheDirByName(const wchar_t* dir_name)
@@ -216,8 +218,8 @@ bool IsFreshFile(const std::wstring& path, unsigned long long max_age_ms)
 
 bool HasFreshStatuslineCache()
 {
-    return IsFreshFile(GetStatuslineCachePath(), CACHE_MAX_AGE_MS) ||
-        IsFreshFile(GetLegacyStatuslineCachePath(), CACHE_MAX_AGE_MS);
+    return IsFreshFile(GetStatuslineCachePath(), STATUSLINE_CACHE_MAX_AGE_MS) ||
+        IsFreshFile(GetLegacyStatuslineCachePath(), STATUSLINE_CACHE_MAX_AGE_MS);
 }
 
 std::wstring GetClaudeConfigDir()
@@ -896,7 +898,7 @@ bool TryLoadCachedUsageSnapshot(CClaudeUsageData::Snapshot& snapshot, bool requi
     {
         unsigned long long last_write_time_ms{};
         if (GetFileLastWriteTimeMs(statusline_cache_path, last_write_time_ms))
-            candidates.push_back(UsageCacheCandidate{ statusline_cache_path, L"Claude Code statusline", 4, last_write_time_ms });
+            candidates.push_back(UsageCacheCandidate{ statusline_cache_path, L"Claude Code statusline", 4, last_write_time_ms, STATUSLINE_CACHE_MAX_AGE_MS });
     }
 
     const std::wstring legacy_statusline_cache_path = GetLegacyStatuslineCachePath();
@@ -904,7 +906,7 @@ bool TryLoadCachedUsageSnapshot(CClaudeUsageData::Snapshot& snapshot, bool requi
     {
         unsigned long long last_write_time_ms{};
         if (GetFileLastWriteTimeMs(legacy_statusline_cache_path, last_write_time_ms))
-            candidates.push_back(UsageCacheCandidate{ legacy_statusline_cache_path, L"Claude Code statusline", 3, last_write_time_ms });
+            candidates.push_back(UsageCacheCandidate{ legacy_statusline_cache_path, L"Claude Code statusline", 3, last_write_time_ms, STATUSLINE_CACHE_MAX_AGE_MS });
     }
 
     const std::wstring plugin_cache_path = GetPluginCachePath();
@@ -912,7 +914,7 @@ bool TryLoadCachedUsageSnapshot(CClaudeUsageData::Snapshot& snapshot, bool requi
     {
         unsigned long long last_write_time_ms{};
         if (GetFileLastWriteTimeMs(plugin_cache_path, last_write_time_ms))
-            candidates.push_back(UsageCacheCandidate{ plugin_cache_path, L"Claude usage cache", 2, last_write_time_ms });
+            candidates.push_back(UsageCacheCandidate{ plugin_cache_path, L"Claude usage cache", 2, last_write_time_ms, PLUGIN_CACHE_MAX_AGE_MS });
     }
 
     const std::wstring legacy_plugin_cache_path = GetLegacyPluginCachePath();
@@ -920,7 +922,7 @@ bool TryLoadCachedUsageSnapshot(CClaudeUsageData::Snapshot& snapshot, bool requi
     {
         unsigned long long last_write_time_ms{};
         if (GetFileLastWriteTimeMs(legacy_plugin_cache_path, last_write_time_ms))
-            candidates.push_back(UsageCacheCandidate{ legacy_plugin_cache_path, L"Claude usage cache", 1, last_write_time_ms });
+            candidates.push_back(UsageCacheCandidate{ legacy_plugin_cache_path, L"Claude usage cache", 1, last_write_time_ms, PLUGIN_CACHE_MAX_AGE_MS });
     }
 
     if (candidates.empty())
@@ -944,7 +946,7 @@ bool TryLoadCachedUsageSnapshot(CClaudeUsageData::Snapshot& snapshot, bool requi
 
     for (const UsageCacheCandidate& candidate : candidates)
     {
-        if (require_fresh_cache && now_ms >= candidate.last_write_time_ms && now_ms - candidate.last_write_time_ms > CACHE_MAX_AGE_MS)
+        if (require_fresh_cache && now_ms >= candidate.last_write_time_ms && now_ms - candidate.last_write_time_ms > candidate.max_age_ms)
             continue;
 
         std::wstring cached_json;
@@ -983,7 +985,6 @@ CClaudeUsageData& CClaudeUsageData::Instance()
 void CClaudeUsageData::RefreshIfNeeded()
 {
     const unsigned long long started_at = GetTickCount64();
-    const bool has_fresh_statusline_cache = HasFreshStatuslineCache();
     bool allow_api_request = true;
     bool backoff_expired = false;
     {
@@ -993,9 +994,6 @@ void CClaudeUsageData::RefreshIfNeeded()
 
         if (m_next_refresh_tick != 0 && started_at < m_next_refresh_tick)
         {
-            if (!has_fresh_statusline_cache)
-                return;
-
             allow_api_request = false;
             if (m_last_refresh_tick != 0 && started_at - m_last_refresh_tick < STATUSLINE_REFRESH_INTERVAL_MS)
                 return;
@@ -1072,13 +1070,13 @@ bool CClaudeUsageData::LoadFromUsageApi(Snapshot& snapshot, unsigned long long& 
     retry_after_ms = 0;
 
     if (!allow_api_request)
-        return TryLoadCachedUsageSnapshot(snapshot, false);
+        return TryLoadCachedUsageSnapshot(snapshot, true);
 
     std::wstring access_token;
     if (!LoadAccessToken(access_token))
     {
         snapshot.error_text = L"Claude access token not found";
-        if (TryLoadCachedUsageSnapshot(snapshot, false))
+        if (TryLoadCachedUsageSnapshot(snapshot, true))
         {
             snapshot.error_text += L"; showing cached values";
             return false;
@@ -1091,7 +1089,7 @@ bool CClaudeUsageData::LoadFromUsageApi(Snapshot& snapshot, unsigned long long& 
     if (!FetchUsageApiJson(access_token, response_json, status_code, retry_after_ms))
     {
         snapshot.error_text = L"Claude usage API request failed";
-        if (TryLoadCachedUsageSnapshot(snapshot, false))
+        if (TryLoadCachedUsageSnapshot(snapshot, true))
         {
             snapshot.error_text += L"; showing cached values";
             return false;
@@ -1107,7 +1105,7 @@ bool CClaudeUsageData::LoadFromUsageApi(Snapshot& snapshot, unsigned long long& 
             snapshot.error_text += L" (login required)";
         else
             snapshot.error_text += L" (access denied)";
-        if (TryLoadCachedUsageSnapshot(snapshot, false))
+        if (TryLoadCachedUsageSnapshot(snapshot, true))
         {
             snapshot.error_text += L"; showing cached values";
             return false;
@@ -1125,7 +1123,7 @@ bool CClaudeUsageData::LoadFromUsageApi(Snapshot& snapshot, unsigned long long& 
         snapshot.error_text += L" (retry in ";
         snapshot.error_text += FormatDurationFromSeconds((retry_after_ms + 999ULL) / 1000ULL);
         snapshot.error_text += L")";
-        if (TryLoadCachedUsageSnapshot(snapshot, false))
+        if (TryLoadCachedUsageSnapshot(snapshot, true))
         {
             snapshot.error_text += L"; showing cached values";
             return false;
@@ -1136,7 +1134,7 @@ bool CClaudeUsageData::LoadFromUsageApi(Snapshot& snapshot, unsigned long long& 
     {
         snapshot.error_text = L"Claude usage API HTTP ";
         snapshot.error_text += std::to_wstring(status_code);
-        if (TryLoadCachedUsageSnapshot(snapshot, false))
+        if (TryLoadCachedUsageSnapshot(snapshot, true))
         {
             snapshot.error_text += L"; showing cached values";
             return false;
@@ -1149,7 +1147,7 @@ bool CClaudeUsageData::LoadFromUsageApi(Snapshot& snapshot, unsigned long long& 
     if (!has_five_hour && !has_seven_day)
     {
         snapshot.error_text = L"Claude usage API returned unexpected data";
-        if (TryLoadCachedUsageSnapshot(snapshot, false))
+        if (TryLoadCachedUsageSnapshot(snapshot, true))
         {
             snapshot.error_text += L"; showing cached values";
             return false;
