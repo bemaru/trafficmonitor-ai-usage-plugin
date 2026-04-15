@@ -47,6 +47,7 @@ Codex usage:
 
 Refresh behavior:
 
+- Claude statusline cache poll: 5 seconds while a fresh bridge cache exists
 - Claude statusline / cache fresh TTL: 180 seconds
 - Claude OAuth API success refresh: 180 seconds
 - Claude other failure retry: 30 seconds

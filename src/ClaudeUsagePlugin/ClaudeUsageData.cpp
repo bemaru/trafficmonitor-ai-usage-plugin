@@ -16,6 +16,7 @@ namespace
 
 constexpr unsigned long long REFRESH_INTERVAL_MS = 180ULL * 1000ULL;
 constexpr unsigned long long RETRY_INTERVAL_MS = 30ULL * 1000ULL;
+constexpr unsigned long long STATUSLINE_REFRESH_INTERVAL_MS = 5ULL * 1000ULL;
 constexpr unsigned long long RATE_LIMIT_RETRY_FALLBACK_MS = 5ULL * 60ULL * 1000ULL;
 constexpr unsigned long long MAX_RETRY_AFTER_MS = 12ULL * 60ULL * 60ULL * 1000ULL;
 constexpr unsigned long long CACHE_MAX_AGE_MS = 180ULL * 1000ULL;
@@ -982,15 +983,17 @@ CClaudeUsageData& CClaudeUsageData::Instance()
 void CClaudeUsageData::RefreshIfNeeded()
 {
     const unsigned long long started_at = GetTickCount64();
+    const bool has_fresh_statusline_cache = HasFreshStatuslineCache();
     {
         std::lock_guard<std::mutex> lock(m_state_mutex);
         if (m_refresh_in_progress)
             return;
 
-        if (m_next_refresh_tick != 0 && started_at < m_next_refresh_tick && !HasFreshStatuslineCache())
+        if (m_next_refresh_tick != 0 && started_at < m_next_refresh_tick && !has_fresh_statusline_cache)
             return;
 
-        const unsigned long long refresh_interval_ms = GetRefreshIntervalMs(m_last_refresh_succeeded);
+        const unsigned long long refresh_interval_ms =
+            (has_fresh_statusline_cache ? STATUSLINE_REFRESH_INTERVAL_MS : GetRefreshIntervalMs(m_last_refresh_succeeded));
         if (m_last_refresh_tick != 0 && started_at - m_last_refresh_tick < refresh_interval_ms)
             return;
 

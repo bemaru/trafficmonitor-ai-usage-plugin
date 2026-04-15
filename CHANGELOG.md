@@ -13,6 +13,7 @@
 - Claude refresh scheduling now measures the next poll window from the completed request time, which avoids retrying earlier than intended after slow API calls.
 - Claude and Codex reset timestamps in tooltips now follow the Windows user locale date/time format instead of a fixed `YYYY-MM-DD HH:MM` string.
 - Fresh Claude statusline bridge cache can now be picked up immediately even while the OAuth API is still in `Retry-After` backoff.
+- Fresh Claude statusline bridge cache is now re-read every 5 seconds instead of waiting for the 180 second OAuth success interval.
 
 ## 0.3.0 - 2026-04-15
 
