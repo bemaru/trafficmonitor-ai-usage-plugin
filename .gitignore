@@ -1,0 +1,37 @@
+# Visual Studio / C++ build output
+.vs/
+build/
+bin/
+Bin/
+obj/
+Obj/
+Debug/
+Release/
+x64/
+Win32/
+ARM64EC/
+
+# User and local IDE files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.VC.db
+*.VC.VC.opendb
+
+# Build artifacts
+*.dll
+*.exe
+*.ilk
+*.pdb
+*.idb
+*.ipdb
+*.iobj
+*.obj
+*.log
+*.tlog
+*.lastbuildstate
+
+# Miscellaneous
+Thumbs.db
+Desktop.ini
