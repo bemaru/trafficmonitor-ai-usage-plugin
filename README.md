@@ -38,7 +38,7 @@ If you do not need TrafficMonitor's temperature monitoring features, the officia
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 login
-powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 watch
+powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 start
 ```
 
 5. If your Codex data does not live in `%USERPROFILE%\.codex`, set `CODEX_HOME` in the Windows environment before launching TrafficMonitor.
@@ -76,25 +76,6 @@ After setup, the taskbar should show `C5h`, `C7d`, `X5h`, and `X7d`, and the too
 <p align="center">
   <img src="docs/images/trafficmonitor-taskbar-compact.png" alt="TrafficMonitor taskbar widget showing Claude and Codex usage bars" />
 </p>
-
-## Optional Claude web helper quick setup
-
-If you want Claude values in TrafficMonitor, run the Claude web helper.
-
-1. Run the one-time login command:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 login
-```
-
-2. When the helper browser opens, sign in at `claude.ai`, then close that helper browser window.
-3. Start the background refresh loop:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 watch
-```
-
-The helper writes `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-usage.json`, and the plug-in prefers that fresh snapshot when it is available.
 
 ## Scope
 
@@ -199,12 +180,10 @@ The project file also contains `ARM64EC` configurations, but the published relea
 ## Environment and path assumptions
 
 - TrafficMonitor runs on Windows, so every runtime path must be readable from Windows.
-- Claude API auth uses `%USERPROFILE%\.claude\.credentials.json` by default.
-- `CLAUDE_CONFIG_DIR` is supported, but it must point to a Windows-readable directory. A Linux-only WSL path such as `/home/<user>/.claude` will not work for the Windows plugin process.
 - Codex state uses `%USERPROFILE%\.codex` by default.
 - `CODEX_HOME` is supported, but it must be visible to the Windows TrafficMonitor process. Setting `CODEX_HOME` only inside WSL is not enough unless TrafficMonitor inherits an equivalent Windows-side path.
 - WSL-style `/mnt/c/...` paths are accepted only when they resolve back to Windows storage.
-- If you override `CLAUDE_CONFIG_DIR` or `CODEX_HOME`, set them in the Windows environment before launching TrafficMonitor. WSL-only shell exports are not visible to the plugin.
+- If you override `CODEX_HOME`, set it in the Windows environment before launching TrafficMonitor. WSL-only shell exports are not visible to the plugin.
 
 ## Claude web helper
 
@@ -215,6 +194,7 @@ Helper files:
 - Dedicated browser profile: `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-browser-profile`
 - Usage snapshot: `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-usage.json`
 - Helper status: `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-helper-status.json`
+- Watch lock: `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-helper-watch.lock`
 
 Prerequisites:
 
@@ -233,6 +213,27 @@ powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 login
 - The login step only prepares the local profile and cookies
 
 ```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 start
+```
+
+- Launches the background refresh loop in a hidden PowerShell window
+- Starts the normal `watch` mode without leaving a console window open on the desktop
+- If a watcher is already running, it prints the current watcher PID instead of starting a duplicate
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 status
+```
+
+- Shows the latest helper files, watch lock state, and helper process information
+- Useful for checking whether the background watcher is healthy before opening TrafficMonitor
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 stop
+```
+
+- Stops the running helper watcher and cleans up a stale watch lock when possible
+
+```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 once
 ```
 
@@ -245,20 +246,19 @@ powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 once
 powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 watch
 ```
 
-- Repeats the cookie-based web fetch every 60 seconds
-- Keeps the helper snapshot fresh for TrafficMonitor
+- Repeats the cookie-based web fetch every 60 seconds in the foreground
+- Useful for troubleshooting; `start` is the normal background command
 - Refuses duplicate `watch` processes; if one is already running, a second start exits after printing the existing watcher PID
 
 Operational notes:
 
-- `login` is the only interactive step. After that, `watch` is the normal background mode.
+- `login` is the only interactive step. After that, `start` is the normal background mode.
 - `watch` is single-instance. Starting it again while one watcher is already running simply reports the existing watcher and exits.
 - Close the helper browser window before `once` or `watch`, otherwise the Chromium cookies database may stay locked.
 - The helper reads the dedicated profile's `Local State` and `Cookies` database and decrypts them under the same Windows user account.
 - The helper uses only Node built-ins under `helper\claude-web-helper`; no separate Playwright install is required.
 - If helper auth expires, `claude-web-helper-status.json` will show the last failure state and Claude will become unavailable after the short helper freshness window expires.
 - Transient helper fetch failures such as upstream `HTTP 500` now keep the most recent helper snapshot only until the normal 90-second freshness window expires; older helper data is still discarded.
-- Claude Code restarted after changing `~/.claude/settings.json`
 
 ## Codex setup
 
@@ -275,6 +275,7 @@ After installation or setup, check the following:
 3. The taskbar items show percentages instead of `--`.
 4. The tooltip shows reset timing for any source that exposes reset metadata.
 5. If you enabled the Claude web helper, `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-usage.json` updates after a successful helper fetch.
+6. If you use the background helper, `powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 status` shows a running watch PID and a recent helper snapshot timestamp.
 
 ## Constraints
 
@@ -297,7 +298,7 @@ After installation or setup, check the following:
 ## Troubleshooting
 
 - Claude values show `--` or `Claude account usage unavailable`:
-  Verify that `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-usage.json` exists and was updated recently by the helper. The Claude tooltip now also surfaces the latest helper status when no fresh helper snapshot is available.
+  Verify that `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-usage.json` exists and was updated recently by the helper. The Claude tooltip now also surfaces the latest helper status when no fresh helper snapshot is available. `powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 status` should show a healthy watcher and recent files.
 
 - Claude web helper status shows `login_required` or `access_denied`:
   Run `powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 login` again and complete the Claude web login in the opened browser window.

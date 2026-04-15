@@ -1,37 +1,21 @@
 #include "pch.h"
 #include "ClaudeUsageData.h"
 
-#include <winhttp.h>
-
-#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cwctype>
 #include <string>
-#include <vector>
 
 namespace
 {
-#pragma comment(lib, "winhttp.lib")
-
 constexpr unsigned long long REFRESH_INTERVAL_MS = 30ULL * 1000ULL;
 constexpr unsigned long long RETRY_INTERVAL_MS = 30ULL * 1000ULL;
-constexpr unsigned long long STATUSLINE_REFRESH_INTERVAL_MS = 5ULL * 1000ULL;
-constexpr unsigned long long RATE_LIMIT_RETRY_FALLBACK_MS = 5ULL * 60ULL * 1000ULL;
-constexpr unsigned long long MAX_RETRY_AFTER_MS = 12ULL * 60ULL * 60ULL * 1000ULL;
+constexpr unsigned long long BACKOFF_RECHECK_INTERVAL_MS = 5ULL * 1000ULL;
 constexpr unsigned long long HELPER_CACHE_MAX_AGE_MS = 90ULL * 1000ULL;
-constexpr unsigned long long PLUGIN_CACHE_MAX_AGE_MS = 180ULL * 1000ULL;
-constexpr unsigned long long STATUSLINE_CACHE_MAX_AGE_MS = 60ULL * 1000ULL;
 constexpr unsigned long long MAX_JSON_FILE_SIZE = 1024ULL * 1024ULL;
-constexpr wchar_t USAGE_API_HOST[] = L"api.anthropic.com";
-constexpr wchar_t USAGE_API_PATH[] = L"/api/oauth/usage";
-constexpr wchar_t USAGE_API_BETA_HEADER[] = L"oauth-2025-04-20";
 constexpr wchar_t PLUGIN_CACHE_DIR_NAME[] = L"trafficmonitor-claude-usage-plugin";
-constexpr wchar_t LEGACY_PLUGIN_CACHE_DIR_NAME[] = L"trafficmonitor-ai-usage-plugin";
 constexpr wchar_t HELPER_CACHE_FILE_NAME[] = L"claude-web-usage.json";
 constexpr wchar_t HELPER_STATUS_FILE_NAME[] = L"claude-web-helper-status.json";
-constexpr wchar_t PLUGIN_CACHE_FILE_NAME[] = L"claude-usage.json";
-constexpr wchar_t STATUSLINE_CACHE_FILE_NAME[] = L"claude-statusline.json";
 
 std::wstring GetEnvVar(const wchar_t* name)
 {
@@ -66,15 +50,6 @@ std::wstring JoinPath(const std::wstring& left, const std::wstring& right)
     return left + L'\\' + right;
 }
 
-struct UsageCacheCandidate
-{
-    std::wstring path;
-    std::wstring source_text;
-    int priority{};
-    unsigned long long last_write_time_ms{};
-    unsigned long long max_age_ms{};
-};
-
 std::wstring GetCacheDirByName(const wchar_t* dir_name)
 {
     const std::wstring local_app_data = TrimString(GetEnvVar(L"LOCALAPPDATA"));
@@ -93,21 +68,11 @@ std::wstring GetPluginCacheDir()
     return GetCacheDirByName(PLUGIN_CACHE_DIR_NAME);
 }
 
-std::wstring GetLegacyPluginCacheDir()
-{
-    return GetCacheDirByName(LEGACY_PLUGIN_CACHE_DIR_NAME);
-}
-
 std::wstring BuildCachePath(const std::wstring& cache_dir, const wchar_t* file_name)
 {
     if (cache_dir.empty())
         return std::wstring();
     return JoinPath(cache_dir, file_name);
-}
-
-std::wstring GetPluginCachePath()
-{
-    return BuildCachePath(GetPluginCacheDir(), PLUGIN_CACHE_FILE_NAME);
 }
 
 std::wstring GetHelperCachePath()
@@ -118,21 +83,6 @@ std::wstring GetHelperCachePath()
 std::wstring GetHelperStatusPath()
 {
     return BuildCachePath(GetPluginCacheDir(), HELPER_STATUS_FILE_NAME);
-}
-
-std::wstring GetLegacyPluginCachePath()
-{
-    return BuildCachePath(GetLegacyPluginCacheDir(), PLUGIN_CACHE_FILE_NAME);
-}
-
-std::wstring GetStatuslineCachePath()
-{
-    return BuildCachePath(GetPluginCacheDir(), STATUSLINE_CACHE_FILE_NAME);
-}
-
-std::wstring GetLegacyStatuslineCachePath()
-{
-    return BuildCachePath(GetLegacyPluginCacheDir(), STATUSLINE_CACHE_FILE_NAME);
 }
 
 bool FileExists(const std::wstring& path)
@@ -211,41 +161,6 @@ bool GetFileLastWriteTimeMs(const std::wstring& path, unsigned long long& last_w
     value.HighPart = attributes.ftLastWriteTime.dwHighDateTime;
     last_write_time_ms = value.QuadPart / 10000ULL;
     return true;
-}
-
-bool IsFreshFile(const std::wstring& path, unsigned long long max_age_ms)
-{
-    if (path.empty() || !FileExists(path))
-        return false;
-
-    unsigned long long last_write_time_ms{};
-    if (!GetFileLastWriteTimeMs(path, last_write_time_ms))
-        return false;
-
-    unsigned long long now_ms{};
-    if (!GetCurrentTimeMs(now_ms))
-        return false;
-
-    return !(now_ms >= last_write_time_ms && now_ms - last_write_time_ms > max_age_ms);
-}
-
-bool HasFreshStatuslineCache()
-{
-    return IsFreshFile(GetStatuslineCachePath(), STATUSLINE_CACHE_MAX_AGE_MS) ||
-        IsFreshFile(GetLegacyStatuslineCachePath(), STATUSLINE_CACHE_MAX_AGE_MS);
-}
-
-std::wstring GetClaudeConfigDir()
-{
-    const std::wstring override_dir = TrimString(GetEnvVar(L"CLAUDE_CONFIG_DIR"));
-    if (!override_dir.empty())
-        return override_dir;
-
-    const std::wstring home = GetEnvVar(L"USERPROFILE");
-    if (home.empty())
-        return std::wstring();
-
-    return JoinPath(home, L".claude");
 }
 
 bool ReadUtf8File(const std::wstring& path, std::wstring& output)
@@ -347,31 +262,6 @@ bool FindJsonKey(const std::wstring& json, const wchar_t* key, size_t& value_pos
 
     value_pos = colon_pos + 1;
     return true;
-}
-
-bool QueryHeaderString(HINTERNET request, const wchar_t* header_name, std::wstring& value)
-{
-    value.clear();
-
-    DWORD size{};
-    if (!WinHttpQueryHeaders(request, WINHTTP_QUERY_CUSTOM, header_name, WINHTTP_NO_OUTPUT_BUFFER, &size, WINHTTP_NO_HEADER_INDEX))
-    {
-        if (GetLastError() != ERROR_INSUFFICIENT_BUFFER)
-            return false;
-    }
-
-    if (size == 0)
-        return false;
-
-    std::wstring buffer(size / sizeof(wchar_t), L'\0');
-    if (!WinHttpQueryHeaders(request, WINHTTP_QUERY_CUSTOM, header_name, buffer.empty() ? nullptr : &buffer[0], &size, WINHTTP_NO_HEADER_INDEX))
-        return false;
-
-    if (!buffer.empty() && buffer.back() == L'\0')
-        buffer.pop_back();
-
-    value = TrimString(buffer);
-    return !value.empty();
 }
 
 size_t FindMatchingBracket(const std::wstring& text, size_t open_pos, wchar_t open_char, wchar_t close_char)
@@ -532,64 +422,6 @@ bool FileTimeToUnixSeconds(const FILETIME& file_time, long long& unix_seconds)
     return true;
 }
 
-bool TryParseRetryAfterMs(const std::wstring& raw_value, unsigned long long& retry_after_ms)
-{
-    retry_after_ms = 0;
-
-    const std::wstring value = TrimString(raw_value);
-    if (value.empty())
-        return false;
-
-    bool numeric = true;
-    for (wchar_t ch : value)
-    {
-        if (ch < L'0' || ch > L'9')
-        {
-            numeric = false;
-            break;
-        }
-    }
-
-    if (numeric)
-    {
-        wchar_t* end_ptr{};
-        const unsigned long long seconds = wcstoull(value.c_str(), &end_ptr, 10);
-        if (end_ptr != value.c_str())
-        {
-            retry_after_ms = seconds * 1000ULL;
-            return true;
-        }
-    }
-
-    SYSTEMTIME retry_time{};
-    if (!WinHttpTimeToSystemTime(value.c_str(), &retry_time))
-        return false;
-
-    FILETIME retry_file_time{};
-    if (!SystemTimeToFileTime(&retry_time, &retry_file_time))
-        return false;
-
-    FILETIME now_file_time{};
-    GetSystemTimeAsFileTime(&now_file_time);
-
-    ULARGE_INTEGER retry_value{};
-    retry_value.LowPart = retry_file_time.dwLowDateTime;
-    retry_value.HighPart = retry_file_time.dwHighDateTime;
-
-    ULARGE_INTEGER now_value{};
-    now_value.LowPart = now_file_time.dwLowDateTime;
-    now_value.HighPart = now_file_time.dwHighDateTime;
-
-    if (retry_value.QuadPart <= now_value.QuadPart)
-    {
-        retry_after_ms = 0;
-        return true;
-    }
-
-    retry_after_ms = (retry_value.QuadPart - now_value.QuadPart) / 10000ULL;
-    return true;
-}
-
 std::wstring FormatDurationFromSeconds(unsigned long long total_seconds)
 {
     if (total_seconds < 60ULL)
@@ -725,138 +557,6 @@ std::wstring BuildMetricTooltip(const wchar_t* label, const CClaudeUsageData::Me
     return text;
 }
 
-unsigned long long GetRefreshIntervalMs(bool last_refresh_succeeded)
-{
-    return (last_refresh_succeeded ? REFRESH_INTERVAL_MS : RETRY_INTERVAL_MS);
-}
-
-bool LoadAccessToken(std::wstring& access_token)
-{
-    const std::wstring config_dir = GetClaudeConfigDir();
-    if (config_dir.empty())
-        return false;
-
-    std::wstring credentials_json;
-    if (!ReadUtf8File(JoinPath(config_dir, L".credentials.json"), credentials_json))
-        return false;
-
-    if (TryGetJsonString(credentials_json, L"accessToken", access_token) && !access_token.empty())
-        return true;
-
-    std::wstring oauth_json;
-    if (!TryGetJsonObject(credentials_json, L"claudeAiOauth", oauth_json))
-        return false;
-
-    return TryGetJsonString(oauth_json, L"accessToken", access_token) && !access_token.empty();
-}
-
-bool FetchUsageApiJson(const std::wstring& access_token, std::wstring& response_body, DWORD& status_code, unsigned long long& retry_after_ms)
-{
-    status_code = 0;
-    retry_after_ms = 0;
-    HINTERNET session{};
-    HINTERNET connection{};
-    HINTERNET request{};
-
-    session = WinHttpOpen(L"TrafficMonitor_ClaudeUsagePlugin/0.3.8", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
-    if (session == nullptr)
-        return false;
-
-    connection = WinHttpConnect(session, USAGE_API_HOST, INTERNET_DEFAULT_HTTPS_PORT, 0);
-    if (connection == nullptr)
-    {
-        if (session != nullptr)
-            WinHttpCloseHandle(session);
-        return false;
-    }
-
-    request = WinHttpOpenRequest(connection, L"GET", USAGE_API_PATH, nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
-    if (request == nullptr)
-    {
-        WinHttpCloseHandle(connection);
-        WinHttpCloseHandle(session);
-        return false;
-    }
-
-    const DWORD decoding_enabled = WINHTTP_DECOMPRESSION_FLAG_GZIP | WINHTTP_DECOMPRESSION_FLAG_DEFLATE;
-    WinHttpSetOption(request, WINHTTP_OPTION_DECOMPRESSION, const_cast<DWORD*>(&decoding_enabled), sizeof(decoding_enabled));
-
-    std::wstring headers = L"Authorization: Bearer ";
-    headers += access_token;
-    headers += L"\r\nanthropic-beta: ";
-    headers += USAGE_API_BETA_HEADER;
-    headers += L"\r\nAccept: application/json\r\n";
-
-    bool succeed = false;
-    if (WinHttpSendRequest(request, headers.c_str(), static_cast<DWORD>(headers.length()), WINHTTP_NO_REQUEST_DATA, 0, 0, 0) &&
-        WinHttpReceiveResponse(request, nullptr))
-    {
-        DWORD header_size = sizeof(status_code);
-        WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &status_code, &header_size, WINHTTP_NO_HEADER_INDEX);
-
-        if (status_code == 429)
-        {
-            std::wstring retry_after_header;
-            if (QueryHeaderString(request, L"Retry-After", retry_after_header))
-            {
-                unsigned long long parsed_retry_after_ms{};
-                if (TryParseRetryAfterMs(retry_after_header, parsed_retry_after_ms))
-                    retry_after_ms = parsed_retry_after_ms;
-            }
-        }
-
-        std::string response_bytes;
-        while (true)
-        {
-            DWORD available_size{};
-            if (!WinHttpQueryDataAvailable(request, &available_size))
-                break;
-            if (available_size == 0)
-            {
-                succeed = true;
-                break;
-            }
-
-            std::string chunk(available_size, '\0');
-            DWORD read_size{};
-            if (!WinHttpReadData(request, &chunk[0], available_size, &read_size))
-                break;
-
-            chunk.resize(read_size);
-            response_bytes += chunk;
-        }
-
-        if (succeed)
-        {
-            if (response_bytes.empty())
-            {
-                response_body.clear();
-            }
-            else
-            {
-                const int wide_size = MultiByteToWideChar(CP_UTF8, 0, response_bytes.data(), static_cast<int>(response_bytes.size()), nullptr, 0);
-                if (wide_size > 0)
-                {
-                    response_body.assign(wide_size, L'\0');
-                    MultiByteToWideChar(CP_UTF8, 0, response_bytes.data(), static_cast<int>(response_bytes.size()), &response_body[0], wide_size);
-                }
-                else
-                {
-                    succeed = false;
-                }
-            }
-        }
-    }
-
-    if (request != nullptr)
-        WinHttpCloseHandle(request);
-    if (connection != nullptr)
-        WinHttpCloseHandle(connection);
-    if (session != nullptr)
-        WinHttpCloseHandle(session);
-    return succeed;
-}
-
 void ApplyResetAtValue(const std::wstring& reset_at, CClaudeUsageData::Metric& metric)
 {
     if (reset_at.empty())
@@ -933,6 +633,11 @@ bool TryLoadHelperUsageSnapshot(CClaudeUsageData::Snapshot& snapshot, bool requi
     snapshot.rolling_7d = cached_snapshot.rolling_7d;
     snapshot.source_text = L"Claude web helper";
     return true;
+}
+
+unsigned long long GetRefreshIntervalMs(bool last_refresh_succeeded)
+{
+    return (last_refresh_succeeded ? REFRESH_INTERVAL_MS : RETRY_INTERVAL_MS);
 }
 
 std::wstring BuildHelperStatusSummary(const std::wstring& state, const std::wstring& error_text)
@@ -1016,99 +721,6 @@ bool TryLoadHelperStatusSummary(std::wstring& summary)
     return !summary.empty();
 }
 
-bool TryLoadCachedUsageSnapshot(CClaudeUsageData::Snapshot& snapshot, bool require_fresh_cache)
-{
-    std::vector<UsageCacheCandidate> candidates;
-
-    const std::wstring helper_cache_path = GetHelperCachePath();
-    if (!helper_cache_path.empty() && FileExists(helper_cache_path))
-    {
-        unsigned long long last_write_time_ms{};
-        if (GetFileLastWriteTimeMs(helper_cache_path, last_write_time_ms))
-            candidates.push_back(UsageCacheCandidate{ helper_cache_path, L"Claude web helper", 5, last_write_time_ms, HELPER_CACHE_MAX_AGE_MS });
-    }
-
-    const std::wstring statusline_cache_path = GetStatuslineCachePath();
-    if (!statusline_cache_path.empty() && FileExists(statusline_cache_path))
-    {
-        unsigned long long last_write_time_ms{};
-        if (GetFileLastWriteTimeMs(statusline_cache_path, last_write_time_ms))
-            candidates.push_back(UsageCacheCandidate{ statusline_cache_path, L"Claude Code statusline", 4, last_write_time_ms, STATUSLINE_CACHE_MAX_AGE_MS });
-    }
-
-    const std::wstring legacy_statusline_cache_path = GetLegacyStatuslineCachePath();
-    if (!legacy_statusline_cache_path.empty() && FileExists(legacy_statusline_cache_path))
-    {
-        unsigned long long last_write_time_ms{};
-        if (GetFileLastWriteTimeMs(legacy_statusline_cache_path, last_write_time_ms))
-            candidates.push_back(UsageCacheCandidate{ legacy_statusline_cache_path, L"Claude Code statusline", 3, last_write_time_ms, STATUSLINE_CACHE_MAX_AGE_MS });
-    }
-
-    const std::wstring plugin_cache_path = GetPluginCachePath();
-    if (!plugin_cache_path.empty() && FileExists(plugin_cache_path))
-    {
-        unsigned long long last_write_time_ms{};
-        if (GetFileLastWriteTimeMs(plugin_cache_path, last_write_time_ms))
-            candidates.push_back(UsageCacheCandidate{ plugin_cache_path, L"Claude usage cache", 2, last_write_time_ms, PLUGIN_CACHE_MAX_AGE_MS });
-    }
-
-    const std::wstring legacy_plugin_cache_path = GetLegacyPluginCachePath();
-    if (!legacy_plugin_cache_path.empty() && FileExists(legacy_plugin_cache_path))
-    {
-        unsigned long long last_write_time_ms{};
-        if (GetFileLastWriteTimeMs(legacy_plugin_cache_path, last_write_time_ms))
-            candidates.push_back(UsageCacheCandidate{ legacy_plugin_cache_path, L"Claude usage cache", 1, last_write_time_ms, PLUGIN_CACHE_MAX_AGE_MS });
-    }
-
-    if (candidates.empty())
-        return false;
-
-    const unsigned long long now_ms = []() {
-        unsigned long long value{};
-        GetCurrentTimeMs(value);
-        return value;
-    }();
-
-    std::sort(
-        candidates.begin(),
-        candidates.end(),
-        [](const UsageCacheCandidate& left, const UsageCacheCandidate& right)
-        {
-            if (left.last_write_time_ms != right.last_write_time_ms)
-                return left.last_write_time_ms > right.last_write_time_ms;
-            return left.priority > right.priority;
-        });
-
-    for (const UsageCacheCandidate& candidate : candidates)
-    {
-        if (require_fresh_cache && now_ms >= candidate.last_write_time_ms && now_ms - candidate.last_write_time_ms > candidate.max_age_ms)
-            continue;
-
-        std::wstring cached_json;
-        if (!ReadUtf8File(candidate.path, cached_json))
-            continue;
-
-        CClaudeUsageData::Snapshot cached_snapshot;
-        if (!LoadSnapshotFromCachedJson(cached_json, cached_snapshot))
-            continue;
-
-        snapshot.rolling_5h = cached_snapshot.rolling_5h;
-        snapshot.rolling_7d = cached_snapshot.rolling_7d;
-        snapshot.source_text = candidate.source_text;
-        return true;
-    }
-
-    return false;
-}
-
-void WriteUsageCache(const std::wstring& response_json)
-{
-    const std::wstring cache_path = GetPluginCachePath();
-    if (cache_path.empty())
-        return;
-
-    WriteUtf8File(cache_path, response_json);
-}
 }
 
 CClaudeUsageData& CClaudeUsageData::Instance()
@@ -1130,7 +742,7 @@ void CClaudeUsageData::RefreshIfNeeded()
         if (m_next_refresh_tick != 0 && started_at < m_next_refresh_tick)
         {
             allow_api_request = false;
-            if (m_last_refresh_tick != 0 && started_at - m_last_refresh_tick < STATUSLINE_REFRESH_INTERVAL_MS)
+            if (m_last_refresh_tick != 0 && started_at - m_last_refresh_tick < BACKOFF_RECHECK_INTERVAL_MS)
                 return;
         }
         else

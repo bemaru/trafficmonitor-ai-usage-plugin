@@ -4,16 +4,19 @@
 
 ### Added
 - Added an optional Claude web helper under `helper/claude-web-helper` plus the `scripts/claude-web-helper.ps1` wrapper.
+- Added helper wrapper commands for `start`, `status`, and `stop` so the Claude watcher can run in the background and be inspected without manual process hunting.
 
 ### Changed
-- Claude now prefers a fresh `claude-web-usage.json` helper snapshot before falling back to the OAuth usage API.
+- Claude now reads only a fresh `claude-web-usage.json` helper snapshot for live Claude data; if that snapshot is missing or stale, Claude shows unavailable.
 - The Claude web helper now uses a dedicated local browser profile plus direct cookie-based `claude.ai` requests instead of replaying Playwright browser state.
+- The helper wrapper now reports the watch lock, helper status, and current snapshot files so local troubleshooting is simpler.
 
 ### Fixed
 - Claude no longer keeps stale local fallback values indefinitely when the live source is unavailable.
 - The Claude web helper now keeps the most recent successful helper snapshot across transient `request_failed` fetch errors, while the DLL still expires that snapshot after the existing 90-second freshness window.
 - The Claude web helper now uses the current `lastActiveOrg` cookie to call `GET /api/organizations/{orgId}/usage` directly before falling back to the broader organizations lookup, avoiding the `GET /api/organizations` 500 path that could leave Claude unavailable even with a valid signed-in web session.
 - Claude runtime now uses the helper snapshot as its only live Claude source, with a simpler `helper -> short fresh snapshot -> unavailable` model instead of OAuth/statusline/plugin-cache fallbacks.
+- Removed the remaining legacy OAuth/statusline/plugin-cache Claude runtime code paths from the DLL after the helper-only runtime simplification.
 
 ## 0.3.7 - 2026-04-15
 
