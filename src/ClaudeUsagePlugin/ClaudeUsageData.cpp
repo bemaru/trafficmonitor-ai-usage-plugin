@@ -25,6 +25,7 @@ constexpr wchar_t USAGE_API_PATH[] = L"/api/oauth/usage";
 constexpr wchar_t USAGE_API_BETA_HEADER[] = L"oauth-2025-04-20";
 constexpr wchar_t PLUGIN_CACHE_DIR_NAME[] = L"trafficmonitor-ai-usage-plugin";
 constexpr wchar_t PLUGIN_CACHE_FILE_NAME[] = L"claude-usage.json";
+constexpr wchar_t STATUSLINE_CACHE_FILE_NAME[] = L"claude-statusline.json";
 
 std::wstring GetEnvVar(const wchar_t* name)
 {
@@ -63,6 +64,7 @@ struct UsageCacheCandidate
 {
     std::wstring path;
     std::wstring source_text;
+    int priority{};
     unsigned long long last_write_time_ms{};
 };
 
@@ -85,6 +87,14 @@ std::wstring GetPluginCachePath()
     if (cache_dir.empty())
         return std::wstring();
     return JoinPath(cache_dir, PLUGIN_CACHE_FILE_NAME);
+}
+
+std::wstring GetStatuslineCachePath()
+{
+    const std::wstring cache_dir = GetPluginCacheDir();
+    if (cache_dir.empty())
+        return std::wstring();
+    return JoinPath(cache_dir, STATUSLINE_CACHE_FILE_NAME);
 }
 
 bool FileExists(const std::wstring& path)
@@ -836,12 +846,20 @@ bool TryLoadCachedUsageSnapshot(CClaudeUsageData::Snapshot& snapshot, bool requi
 {
     std::vector<UsageCacheCandidate> candidates;
 
+    const std::wstring statusline_cache_path = GetStatuslineCachePath();
+    if (!statusline_cache_path.empty() && FileExists(statusline_cache_path))
+    {
+        unsigned long long last_write_time_ms{};
+        if (GetFileLastWriteTimeMs(statusline_cache_path, last_write_time_ms))
+            candidates.push_back(UsageCacheCandidate{ statusline_cache_path, L"Claude Code statusline", 2, last_write_time_ms });
+    }
+
     const std::wstring plugin_cache_path = GetPluginCachePath();
     if (!plugin_cache_path.empty() && FileExists(plugin_cache_path))
     {
         unsigned long long last_write_time_ms{};
         if (GetFileLastWriteTimeMs(plugin_cache_path, last_write_time_ms))
-            candidates.push_back(UsageCacheCandidate{ plugin_cache_path, L"Claude usage cache", last_write_time_ms });
+            candidates.push_back(UsageCacheCandidate{ plugin_cache_path, L"Claude usage cache", 1, last_write_time_ms });
     }
 
     if (candidates.empty())
@@ -858,6 +876,8 @@ bool TryLoadCachedUsageSnapshot(CClaudeUsageData::Snapshot& snapshot, bool requi
         candidates.end(),
         [](const UsageCacheCandidate& left, const UsageCacheCandidate& right)
         {
+            if (left.priority != right.priority)
+                return left.priority > right.priority;
             return left.last_write_time_ms > right.last_write_time_ms;
         });
 

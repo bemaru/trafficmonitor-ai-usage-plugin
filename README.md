@@ -7,7 +7,7 @@ Versioning and release notes are tracked in [CHANGELOG.md](CHANGELOG.md).
 ## Scope
 
 - Claude and Codex account usage
-- Claude prefers live API data, but can fall back to cached usage data when the API is temporarily unavailable or rate-limited
+- Claude prefers an optional Claude Code statusline bridge when configured, then falls back to the OAuth usage endpoint and cached data
 
 ## What the plugin shows
 
@@ -22,11 +22,13 @@ Tooltip text also shows reset timing when the upstream data exposes it.
 
 Claude usage:
 
+- Prefers a local Claude Code statusline bridge cache at `%LOCALAPPDATA%\trafficmonitor-ai-usage-plugin\claude-statusline.json` when available
+- The included `scripts\claude-statusline-wrapper.ps1` keeps `ccstatusline` working while also writing that bridge cache
 - Reads the local Claude OAuth access token from `%USERPROFILE%\.claude\.credentials.json`
 - Or from `CLAUDE_CONFIG_DIR\.credentials.json` if `CLAUDE_CONFIG_DIR` is set
 - Sends a read-only request to `https://api.anthropic.com/api/oauth/usage`
 - Caches successful Claude usage responses locally and reuses them for a short period
-- If the API is rate-limited or temporarily unavailable, the plugin can fall back to the most recent cached usage snapshot
+- If the OAuth usage endpoint is rate-limited or temporarily unavailable, the plugin can fall back to the most recent cached usage snapshot
 
 Codex usage:
 
@@ -45,7 +47,8 @@ Codex usage:
 
 Refresh behavior:
 
-- Claude success refresh / fresh-cache TTL: 180 seconds
+- Claude statusline / cache fresh TTL: 180 seconds
+- Claude OAuth API success refresh: 180 seconds
 - Claude other failure retry: 30 seconds
 - Claude rate limit retry: respects `Retry-After` when present, otherwise falls back to 5 minutes
 - Codex success refresh: 60 seconds
@@ -83,11 +86,35 @@ Build output:
 
 This repo only ships the plugin DLL. It does not bundle TrafficMonitor itself.
 
+## Optional Claude statusline bridge
+
+If you use Claude Code on the same Windows account, the preferred Claude source is the official statusline `rate_limits` payload. This avoids relying on the undocumented OAuth usage endpoint during active Claude Code sessions.
+
+1. Copy `scripts\claude-statusline-wrapper.ps1` to `%USERPROFILE%\.claude\trafficmonitor-statusline-wrapper.ps1`.
+2. Update `%USERPROFILE%\.claude\settings.json`:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\<user>\\.claude\\trafficmonitor-statusline-wrapper.ps1",
+    "padding": 0
+  }
+}
+```
+
+This wrapper:
+
+- Reads the official Claude Code statusline JSON from stdin
+- Writes `rate_limits` to `%LOCALAPPDATA%\trafficmonitor-ai-usage-plugin\claude-statusline.json`
+- Forwards the same stdin payload to `bunx -y ccstatusline@latest`, so the existing `ccstatusline` output keeps working
+
 ## Constraints
 
 - This depends on Claude's local credential file layout.
-- This depends on Anthropic keeping the current usage endpoint and response shape compatible.
+- The Claude OAuth usage endpoint used as fallback is undocumented and may change.
 - Claude cached fallback values come only from the plugin's own last successful API snapshot and can be stale when the live API is unavailable.
+- The Claude statusline bridge only updates while Claude Code is running and emitting statusline payloads.
 - Codex usage currently comes from local Codex state, not an official OpenAI usage API.
 - Codex values update only after Codex itself writes fresh rate-limit data locally.
 - This is best-effort integration, not an official Anthropic integration surface.
@@ -108,6 +135,9 @@ This repo only ships the plugin DLL. It does not bundle TrafficMonitor itself.
 
 - `Claude usage API rate limited`:
   The endpoint rejected requests temporarily. The plugin will wait until `Retry-After` and may show the plugin's most recent Claude cache if available.
+
+- Claude values do not match the Claude Code UI:
+  Verify that the statusline wrapper is installed, Claude Code is actually running, and `%LOCALAPPDATA%\trafficmonitor-ai-usage-plugin\claude-statusline.json` is updating.
 
 - `Claude usage API returned unexpected data`:
   The response schema changed and the plugin needs an update.
