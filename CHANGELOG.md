@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.3.3 - 2026-04-15
+
+### Changed
+- Increased the visual separation between `5h` and `7d` bar colors while keeping a single color family per provider.
+
+### Fixed
+- Usage bar layout now reserves a realistic fixed value-text width (`99.9%`), so bars stay stable without becoming unnecessarily short.
+
 ## 0.3.2 - 2026-04-15
 
 ### Fixed

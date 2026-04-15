@@ -16,13 +16,13 @@ DrawColors GetDrawColors(ClaudeUsageWindow window, bool dark_mode)
     if (window == ClaudeUsageWindow::Rolling5Hours)
     {
         return dark_mode
-            ? DrawColors{ RGB(55, 128, 255), RGB(42, 54, 72), RGB(64, 82, 110), RGB(220, 228, 240) }
-            : DrawColors{ RGB(31, 108, 216), RGB(224, 232, 244), RGB(173, 187, 206), RGB(54, 62, 76) };
+            ? DrawColors{ RGB(78, 143, 255), RGB(36, 48, 68), RGB(56, 76, 110), RGB(226, 232, 242) }
+            : DrawColors{ RGB(24, 92, 204), RGB(224, 233, 246), RGB(166, 184, 208), RGB(52, 60, 74) };
     }
 
     return dark_mode
-        ? DrawColors{ RGB(122, 176, 255), RGB(46, 58, 79), RGB(74, 96, 128), RGB(220, 228, 240) }
-        : DrawColors{ RGB(92, 150, 230), RGB(229, 236, 247), RGB(181, 194, 214), RGB(54, 62, 76) };
+        ? DrawColors{ RGB(124, 180, 255), RGB(40, 54, 74), RGB(64, 84, 112), RGB(222, 229, 240) }
+        : DrawColors{ RGB(76, 138, 216), RGB(231, 238, 248), RGB(182, 196, 216), RGB(54, 62, 76) };
 }
 
 int MeasureTextWidth(CDC* pDC, const wchar_t* text)
@@ -66,13 +66,13 @@ DrawColors GetCodexDrawColors(CodexUsageWindow window, bool dark_mode)
     if (window == CodexUsageWindow::Rolling5Hours)
     {
         return dark_mode
-            ? DrawColors{ RGB(44, 177, 97), RGB(40, 68, 49), RGB(66, 100, 78), RGB(226, 230, 236) }
-            : DrawColors{ RGB(33, 160, 96), RGB(224, 244, 233), RGB(173, 206, 184), RGB(54, 62, 76) };
+            ? DrawColors{ RGB(38, 166, 92), RGB(40, 68, 49), RGB(66, 100, 78), RGB(226, 230, 236) }
+            : DrawColors{ RGB(34, 152, 86), RGB(224, 244, 233), RGB(173, 206, 184), RGB(54, 62, 76) };
     }
 
     return dark_mode
-        ? DrawColors{ RGB(102, 198, 134), RGB(44, 73, 54), RGB(72, 109, 84), RGB(226, 230, 236) }
-        : DrawColors{ RGB(74, 176, 114), RGB(229, 246, 236), RGB(179, 210, 190), RGB(54, 62, 76) };
+        ? DrawColors{ RGB(84, 186, 121), RGB(44, 73, 54), RGB(72, 109, 84), RGB(226, 230, 236) }
+        : DrawColors{ RGB(104, 194, 135), RGB(229, 246, 236), RGB(179, 210, 190), RGB(54, 62, 76) };
 }
 
 void DrawUsageItemBar(
@@ -182,7 +182,7 @@ const wchar_t* CClaudeUsageItem::GetItemValueText() const
 
 const wchar_t* CClaudeUsageItem::GetItemValueSampleText() const
 {
-    return L"100.0%";
+    return L"99.9%";
 }
 
 bool CClaudeUsageItem::IsCustomDraw() const
@@ -249,7 +249,7 @@ const wchar_t* CCodexUsageItem::GetItemValueText() const
 
 const wchar_t* CCodexUsageItem::GetItemValueSampleText() const
 {
-    return L"100.0%";
+    return L"99.9%";
 }
 
 bool CCodexUsageItem::IsCustomDraw() const
