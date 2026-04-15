@@ -2,7 +2,7 @@
 
 Private standalone repository for building the `ClaudeUsagePlugin.dll` plugin for [TrafficMonitor](https://github.com/zhongyang219/TrafficMonitor).
 
-Versioning and release notes are tracked in [CHANGELOG.md](/D:/jhkwak/repos/bemaru/trafficmonitor-claude-usage-plugin/CHANGELOG.md).
+Versioning and release notes are tracked in [CHANGELOG.md](CHANGELOG.md).
 
 ## Scope
 
@@ -50,7 +50,7 @@ Refresh behavior:
 
 ## Build
 
-Open [ClaudeUsagePlugin.sln](/D:/jhkwak/repos/bemaru/trafficmonitor-claude-usage-plugin/ClaudeUsagePlugin.sln) in Visual Studio and build `Release|x64` or `Release|Win32`, or run:
+Open [ClaudeUsagePlugin.sln](ClaudeUsagePlugin.sln) in Visual Studio and build `Release|x64` or `Release|Win32`, or run:
 
 ```powershell
 MSBuild.exe .\ClaudeUsagePlugin.sln /t:ClaudeUsagePlugin /p:Configuration=Release /p:Platform=x64
