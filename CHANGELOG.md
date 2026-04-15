@@ -3,10 +3,11 @@
 ## Unreleased
 
 ### Changed
-- Claude usage now follows a ccstatusline-style cache policy with a 180 second fresh-cache window and cached fallback values when live usage fetches fail.
+- Claude usage now uses only the plugin's own cached API snapshot as the Claude fallback source.
 
 ### Fixed
 - Claude usage polling now respects `Retry-After` when the Anthropic usage API returns `429 rate limited`, instead of retrying every 5 seconds.
+- Claude refresh scheduling now measures the next poll window from the completed request time, which avoids retrying earlier than intended after slow API calls.
 
 ## 0.3.0 - 2026-04-15
 

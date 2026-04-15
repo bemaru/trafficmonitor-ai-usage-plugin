@@ -27,7 +27,6 @@ Claude usage:
 - Sends a read-only request to `https://api.anthropic.com/api/oauth/usage`
 - Caches successful Claude usage responses locally and reuses them for a short period
 - If the API is rate-limited or temporarily unavailable, the plugin can fall back to the most recent cached usage snapshot
-- If `ccstatusline` cache exists at `%USERPROFILE%\.cache\ccstatusline\usage.json`, the plugin can use that as an additional Claude fallback source
 
 Codex usage:
 
@@ -88,7 +87,7 @@ This repo only ships the plugin DLL. It does not bundle TrafficMonitor itself.
 
 - This depends on Claude's local credential file layout.
 - This depends on Anthropic keeping the current usage endpoint and response shape compatible.
-- Claude cached fallback values can be stale when the live API is unavailable.
+- Claude cached fallback values come only from the plugin's own last successful API snapshot and can be stale when the live API is unavailable.
 - Codex usage currently comes from local Codex state, not an official OpenAI usage API.
 - Codex values update only after Codex itself writes fresh rate-limit data locally.
 - This is best-effort integration, not an official Anthropic integration surface.
@@ -108,7 +107,7 @@ This repo only ships the plugin DLL. It does not bundle TrafficMonitor itself.
   The token is expired or no longer accepted by the API.
 
 - `Claude usage API rate limited`:
-  The endpoint rejected requests temporarily. The plugin will wait until `Retry-After` and may show cached Claude values if available.
+  The endpoint rejected requests temporarily. The plugin will wait until `Retry-After` and may show the plugin's most recent Claude cache if available.
 
 - `Claude usage API returned unexpected data`:
   The response schema changed and the plugin needs an update.

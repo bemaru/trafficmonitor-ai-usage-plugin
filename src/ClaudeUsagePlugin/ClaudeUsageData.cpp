@@ -25,7 +25,6 @@ constexpr wchar_t USAGE_API_PATH[] = L"/api/oauth/usage";
 constexpr wchar_t USAGE_API_BETA_HEADER[] = L"oauth-2025-04-20";
 constexpr wchar_t PLUGIN_CACHE_DIR_NAME[] = L"trafficmonitor-ai-usage-plugin";
 constexpr wchar_t PLUGIN_CACHE_FILE_NAME[] = L"claude-usage.json";
-constexpr wchar_t CCSTATUSLINE_CACHE_RELATIVE_PATH[] = L".cache\\ccstatusline\\usage.json";
 
 std::wstring GetEnvVar(const wchar_t* name)
 {
@@ -86,14 +85,6 @@ std::wstring GetPluginCachePath()
     if (cache_dir.empty())
         return std::wstring();
     return JoinPath(cache_dir, PLUGIN_CACHE_FILE_NAME);
-}
-
-std::wstring GetCcStatuslineCachePath()
-{
-    const std::wstring home = TrimString(GetEnvVar(L"USERPROFILE"));
-    if (home.empty())
-        return std::wstring();
-    return JoinPath(home, CCSTATUSLINE_CACHE_RELATIVE_PATH);
 }
 
 bool FileExists(const std::wstring& path)
@@ -826,32 +817,11 @@ bool LoadMetricFromApiSection(const std::wstring& response_json, const wchar_t* 
     return true;
 }
 
-bool LoadMetricFromCacheFields(const std::wstring& json, const wchar_t* usage_key, const wchar_t* reset_key, CClaudeUsageData::Metric& metric)
-{
-    double usage{};
-    if (!TryGetJsonDouble(json, usage_key, usage))
-        return false;
-
-    metric.available = true;
-    metric.percentage = usage;
-
-    std::wstring resets_at;
-    if (TryGetJsonString(json, reset_key, resets_at))
-        ApplyResetAtValue(resets_at, metric);
-
-    return true;
-}
-
 bool LoadSnapshotFromCachedJson(const std::wstring& json, CClaudeUsageData::Snapshot& snapshot)
 {
     const bool has_api_5h = LoadMetricFromApiSection(json, L"five_hour", snapshot.rolling_5h);
     const bool has_api_7d = LoadMetricFromApiSection(json, L"seven_day", snapshot.rolling_7d);
-    if (has_api_5h || has_api_7d)
-        return true;
-
-    const bool has_cache_5h = LoadMetricFromCacheFields(json, L"sessionUsage", L"sessionResetAt", snapshot.rolling_5h);
-    const bool has_cache_7d = LoadMetricFromCacheFields(json, L"weeklyUsage", L"weeklyResetAt", snapshot.rolling_7d);
-    return has_cache_5h || has_cache_7d;
+    return has_api_5h || has_api_7d;
 }
 
 bool TryLoadCachedUsageSnapshot(CClaudeUsageData::Snapshot& snapshot, bool require_fresh_cache)
@@ -864,14 +834,6 @@ bool TryLoadCachedUsageSnapshot(CClaudeUsageData::Snapshot& snapshot, bool requi
         unsigned long long last_write_time_ms{};
         if (GetFileLastWriteTimeMs(plugin_cache_path, last_write_time_ms))
             candidates.push_back(UsageCacheCandidate{ plugin_cache_path, L"Claude usage cache", last_write_time_ms });
-    }
-
-    const std::wstring ccstatusline_cache_path = GetCcStatuslineCachePath();
-    if (!ccstatusline_cache_path.empty() && FileExists(ccstatusline_cache_path))
-    {
-        unsigned long long last_write_time_ms{};
-        if (GetFileLastWriteTimeMs(ccstatusline_cache_path, last_write_time_ms))
-            candidates.push_back(UsageCacheCandidate{ ccstatusline_cache_path, L"ccstatusline cache", last_write_time_ms });
     }
 
     if (candidates.empty())
@@ -931,17 +893,17 @@ CClaudeUsageData& CClaudeUsageData::Instance()
 
 void CClaudeUsageData::RefreshIfNeeded()
 {
-    const unsigned long long now = GetTickCount64();
+    const unsigned long long started_at = GetTickCount64();
     {
         std::lock_guard<std::mutex> lock(m_state_mutex);
         if (m_refresh_in_progress)
             return;
 
-        if (m_next_refresh_tick != 0 && now < m_next_refresh_tick)
+        if (m_next_refresh_tick != 0 && started_at < m_next_refresh_tick)
             return;
 
         const unsigned long long refresh_interval_ms = GetRefreshIntervalMs(m_last_refresh_succeeded);
-        if (m_last_refresh_tick != 0 && now - m_last_refresh_tick < refresh_interval_ms)
+        if (m_last_refresh_tick != 0 && started_at - m_last_refresh_tick < refresh_interval_ms)
             return;
 
         m_refresh_in_progress = true;
@@ -949,12 +911,13 @@ void CClaudeUsageData::RefreshIfNeeded()
 
     unsigned long long retry_after_ms{};
     const bool succeeded = Refresh(retry_after_ms);
+    const unsigned long long completed_at = GetTickCount64();
 
     {
         std::lock_guard<std::mutex> lock(m_state_mutex);
-        m_last_refresh_tick = now;
+        m_last_refresh_tick = completed_at;
         m_last_refresh_succeeded = succeeded;
-        m_next_refresh_tick = (retry_after_ms == 0 ? 0 : now + retry_after_ms);
+        m_next_refresh_tick = (retry_after_ms == 0 ? 0 : completed_at + retry_after_ms);
         m_refresh_in_progress = false;
     }
 }
