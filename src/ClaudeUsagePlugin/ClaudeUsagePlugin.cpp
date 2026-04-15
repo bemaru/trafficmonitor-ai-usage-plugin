@@ -327,7 +327,7 @@ const wchar_t* CClaudeUsagePlugin::GetInfo(PluginInfoIndex index)
         value = L"0.3.0";
         break;
     case TMI_URL:
-        value = L"https://github.com/bemaru/trafficmonitor-claude-usage-plugin";
+        value = L"https://github.com/bemaru/trafficmonitor-ai-usage-plugin";
         break;
     default:
         value.clear();
