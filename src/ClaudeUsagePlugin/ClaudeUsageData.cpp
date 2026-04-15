@@ -937,9 +937,9 @@ bool TryLoadCachedUsageSnapshot(CClaudeUsageData::Snapshot& snapshot, bool requi
         candidates.end(),
         [](const UsageCacheCandidate& left, const UsageCacheCandidate& right)
         {
-            if (left.priority != right.priority)
-                return left.priority > right.priority;
-            return left.last_write_time_ms > right.last_write_time_ms;
+            if (left.last_write_time_ms != right.last_write_time_ms)
+                return left.last_write_time_ms > right.last_write_time_ms;
+            return left.priority > right.priority;
         });
 
     for (const UsageCacheCandidate& candidate : candidates)
@@ -984,31 +984,41 @@ void CClaudeUsageData::RefreshIfNeeded()
 {
     const unsigned long long started_at = GetTickCount64();
     const bool has_fresh_statusline_cache = HasFreshStatuslineCache();
+    bool allow_api_request = true;
     {
         std::lock_guard<std::mutex> lock(m_state_mutex);
         if (m_refresh_in_progress)
             return;
 
-        if (m_next_refresh_tick != 0 && started_at < m_next_refresh_tick && !has_fresh_statusline_cache)
-            return;
+        if (m_next_refresh_tick != 0 && started_at < m_next_refresh_tick)
+        {
+            if (!has_fresh_statusline_cache)
+                return;
 
-        const unsigned long long refresh_interval_ms =
-            (has_fresh_statusline_cache ? STATUSLINE_REFRESH_INTERVAL_MS : GetRefreshIntervalMs(m_last_refresh_succeeded));
-        if (m_last_refresh_tick != 0 && started_at - m_last_refresh_tick < refresh_interval_ms)
-            return;
+            allow_api_request = false;
+            if (m_last_refresh_tick != 0 && started_at - m_last_refresh_tick < STATUSLINE_REFRESH_INTERVAL_MS)
+                return;
+        }
+        else
+        {
+            const unsigned long long refresh_interval_ms = GetRefreshIntervalMs(m_last_refresh_succeeded);
+            if (m_last_refresh_tick != 0 && started_at - m_last_refresh_tick < refresh_interval_ms)
+                return;
+        }
 
         m_refresh_in_progress = true;
     }
 
     unsigned long long retry_after_ms{};
-    const bool succeeded = Refresh(retry_after_ms);
+    const bool succeeded = Refresh(retry_after_ms, allow_api_request);
     const unsigned long long completed_at = GetTickCount64();
 
     {
         std::lock_guard<std::mutex> lock(m_state_mutex);
         m_last_refresh_tick = completed_at;
         m_last_refresh_succeeded = succeeded;
-        m_next_refresh_tick = (retry_after_ms == 0 ? 0 : completed_at + retry_after_ms);
+        if (allow_api_request)
+            m_next_refresh_tick = (retry_after_ms == 0 ? 0 : completed_at + retry_after_ms);
         m_refresh_in_progress = false;
     }
 }
@@ -1040,10 +1050,10 @@ const std::wstring& CClaudeUsageData::GetTooltipText() const
     return tooltip_text;
 }
 
-bool CClaudeUsageData::Refresh(unsigned long long& retry_after_ms)
+bool CClaudeUsageData::Refresh(unsigned long long& retry_after_ms, bool allow_api_request)
 {
     Snapshot snapshot;
-    const bool succeeded = LoadFromUsageApi(snapshot, retry_after_ms);
+    const bool succeeded = LoadFromUsageApi(snapshot, retry_after_ms, allow_api_request);
     FinalizeSnapshot(snapshot);
 
     std::lock_guard<std::mutex> lock(m_state_mutex);
@@ -1051,12 +1061,12 @@ bool CClaudeUsageData::Refresh(unsigned long long& retry_after_ms)
     return succeeded;
 }
 
-bool CClaudeUsageData::LoadFromUsageApi(Snapshot& snapshot, unsigned long long& retry_after_ms)
+bool CClaudeUsageData::LoadFromUsageApi(Snapshot& snapshot, unsigned long long& retry_after_ms, bool allow_api_request)
 {
     retry_after_ms = 0;
 
-    if (TryLoadCachedUsageSnapshot(snapshot, true))
-        return true;
+    if (!allow_api_request)
+        return TryLoadCachedUsageSnapshot(snapshot, false);
 
     std::wstring access_token;
     if (!LoadAccessToken(access_token))

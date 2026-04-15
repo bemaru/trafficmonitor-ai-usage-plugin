@@ -43,8 +43,8 @@ public:
 private:
     CClaudeUsageData() = default;
 
-    bool Refresh(unsigned long long& retry_after_ms);
-    static bool LoadFromUsageApi(Snapshot& snapshot, unsigned long long& retry_after_ms);
+    bool Refresh(unsigned long long& retry_after_ms, bool allow_api_request);
+    static bool LoadFromUsageApi(Snapshot& snapshot, unsigned long long& retry_after_ms, bool allow_api_request);
     static void FinalizeSnapshot(Snapshot& snapshot);
     static bool HasAvailableMetric(const Snapshot& snapshot);
 

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.3.6 - 2026-04-15
+
+### Changed
+- Claude now tries the OAuth usage endpoint first and only falls back to the freshest available local snapshot when the live request is unavailable.
+
+### Fixed
+- Fresh Claude statusline cache no longer masks newer live API data when Claude Code is not actively updating the local bridge cache.
+
 ## 0.3.5 - 2026-04-15
 
 ### Changed
