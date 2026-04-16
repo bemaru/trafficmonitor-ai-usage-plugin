@@ -15,6 +15,7 @@
 - Bundled helper files now ship under `plugins\ClaudeUsagePlugin\...`, while `ClaudeUsagePlugin.dll` stays in the `plugins` root so TrafficMonitor can still discover the DLL.
 - Public-facing naming now uses `TrafficMonitor AI Usage Limits` and `AI Usage Limits`, while the internal DLL and folder names remain `ClaudeUsagePlugin` for compatibility.
 - README now documents the taskbar-first install flow, the one-time Claude login, and the meaning of the `C5h` / `C7d` / `X5h` / `X7d` labels more clearly.
+- README was shortened into a quick-start focused landing page, with detailed install/runtime/build/troubleshooting content moved into `docs/`.
 - Added a release checklist plus a short release-notes template so private GitHub releases follow a consistent format.
 - Refreshed the compact taskbar screenshot to show the Claude/Codex-only layout more clearly.
 - Removed the deprecated Claude statusline wrapper scripts, so the repo no longer ships the unused `ccstatusline` integration path.
