@@ -502,21 +502,23 @@
   </ItemGroup>
   <ItemGroup>
     <ClaudeHelperAsset Include="$(RepoRoot)scripts\claude-web-helper.ps1">
-      <Destination>$(OutDir)claude-web-helper.ps1</Destination>
+      <Destination>$(OutDir)ClaudeUsagePlugin\claude-web-helper.ps1</Destination>
     </ClaudeHelperAsset>
     <ClaudeHelperAsset Include="$(RepoRoot)helper\claude-web-helper\index.mjs">
-      <Destination>$(OutDir)helper\claude-web-helper\index.mjs</Destination>
+      <Destination>$(OutDir)ClaudeUsagePlugin\helper\claude-web-helper\index.mjs</Destination>
     </ClaudeHelperAsset>
     <ClaudeHelperAsset Include="$(RepoRoot)helper\claude-web-helper\package.json">
-      <Destination>$(OutDir)helper\claude-web-helper\package.json</Destination>
+      <Destination>$(OutDir)ClaudeUsagePlugin\helper\claude-web-helper\package.json</Destination>
     </ClaudeHelperAsset>
     <ClaudeHelperAsset Include="$(RepoRoot)helper\claude-web-helper\package-lock.json">
-      <Destination>$(OutDir)helper\claude-web-helper\package-lock.json</Destination>
+      <Destination>$(OutDir)ClaudeUsagePlugin\helper\claude-web-helper\package-lock.json</Destination>
     </ClaudeHelperAsset>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <Target Name="CopyClaudeHelperAssets" AfterTargets="Build">
-    <MakeDir Directories="$(OutDir)helper\claude-web-helper" />
+    <Delete Files="$(OutDir)claude-web-helper.ps1" />
+    <RemoveDir Directories="$(OutDir)helper" />
+    <MakeDir Directories="$(OutDir)ClaudeUsagePlugin\helper\claude-web-helper" />
     <Copy SourceFiles="@(ClaudeHelperAsset)" DestinationFiles="@(ClaudeHelperAsset->'%(Destination)')" SkipUnchangedFiles="true" />
   </Target>
   <ImportGroup Label="ExtensionTargets">

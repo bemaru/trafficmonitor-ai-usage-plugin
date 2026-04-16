@@ -462,9 +462,13 @@ std::wstring FindBundledHelperScriptPath()
     if (module_dir.empty())
         return std::wstring();
 
-    const std::wstring bundled_script_path = JoinPath(module_dir, L"claude-web-helper.ps1");
-    if (FileExists(bundled_script_path))
-        return bundled_script_path;
+    const std::wstring bundled_subdir_script_path = JoinPath(module_dir, L"ClaudeUsagePlugin\\claude-web-helper.ps1");
+    if (FileExists(bundled_subdir_script_path))
+        return bundled_subdir_script_path;
+
+    const std::wstring bundled_root_script_path = JoinPath(module_dir, L"claude-web-helper.ps1");
+    if (FileExists(bundled_root_script_path))
+        return bundled_root_script_path;
 
     const std::wstring build_script_path = JoinPath(module_dir, L"..\\..\\..\\scripts\\claude-web-helper.ps1");
     if (FileExists(build_script_path))

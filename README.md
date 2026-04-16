@@ -32,17 +32,31 @@ If you do not need TrafficMonitor's temperature monitoring features, the officia
 ## Getting Started
 
 1. Install the official TrafficMonitor release and choose the same architecture as the plugin DLL you plan to use.
-2. Copy `ClaudeUsagePlugin.dll` into the TrafficMonitor `plugins` directory, then restart TrafficMonitor.
-3. Open TrafficMonitor's taskbar window and enable `Claude 5h`, `Claude 7d`, `Codex 5h`, and `Codex 7d`.
-4. If you want Claude values to track the Claude web dashboard more closely, run the one-time Claude login:
+2. Copy the release contents into the TrafficMonitor `plugins` directory with this layout:
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 login
+```text
+plugins
+├─ ClaudeUsagePlugin.dll
+└─ ClaudeUsagePlugin
+   ├─ claude-web-helper.ps1
+   └─ helper
+      └─ claude-web-helper
+         ├─ index.mjs
+         ├─ package.json
+         └─ package-lock.json
 ```
 
-5. If your Codex data does not live in `%USERPROFILE%\.codex`, set `CODEX_HOME` in the Windows environment before launching TrafficMonitor.
+3. Restart TrafficMonitor.
+4. Open TrafficMonitor's taskbar window and enable `Claude 5h`, `Claude 7d`, `Codex 5h`, and `Codex 7d`.
+5. If you want Claude values to track the Claude web dashboard more closely, run the one-time Claude login:
 
-After setup, the taskbar should show `C5h`, `C7d`, `X5h`, and `X7d`, and the tooltip should show reset timing when that source exposes it. If the bundled helper files stay next to the DLL, TrafficMonitor will auto-start the Claude watcher on plugin load after that first login.
+```powershell
+powershell -ExecutionPolicy Bypass -File .\plugins\ClaudeUsagePlugin\claude-web-helper.ps1 login
+```
+
+6. If your Codex data does not live in `%USERPROFILE%\.codex`, set `CODEX_HOME` in the Windows environment before launching TrafficMonitor.
+
+After setup, the taskbar should show `C5h`, `C7d`, `X5h`, and `X7d`, and the tooltip should show reset timing when that source exposes it. If the bundled helper files stay under `plugins\ClaudeUsagePlugin`, TrafficMonitor will auto-start the Claude watcher on plugin load after that first login.
 
 ## Enable the TrafficMonitor taskbar items
 
@@ -143,14 +157,16 @@ Refresh behavior:
 2. Download the plugin asset that matches your TrafficMonitor architecture:
    - `ClaudeUsagePlugin_v*_x64.zip` for `x64` TrafficMonitor
    - `ClaudeUsagePlugin_v*_x86.zip` for `x86` TrafficMonitor
-3. Copy `ClaudeUsagePlugin.dll` into the TrafficMonitor `plugins` directory.
-   - Example: if TrafficMonitor is unpacked at `D:\Apps\TrafficMonitor`, copy the DLL to `D:\Apps\TrafficMonitor\plugins\ClaudeUsagePlugin.dll`
+3. Copy the release contents into the TrafficMonitor `plugins` directory:
+   - `D:\Apps\TrafficMonitor\plugins\ClaudeUsagePlugin.dll`
+   - `D:\Apps\TrafficMonitor\plugins\ClaudeUsagePlugin\claude-web-helper.ps1`
+   - `D:\Apps\TrafficMonitor\plugins\ClaudeUsagePlugin\helper\claude-web-helper\...`
 4. Restart TrafficMonitor.
 5. Open plug-in management and confirm `Claude/Codex Usage` is loaded.
 6. Enable `Claude 5h`, `Claude 7d`, `Codex 5h`, `Codex 7d` in the displayed items list.
 
 If the plug-in loads but the items do not appear, check the DLL architecture first. An `x64` DLL will not load into `x86` TrafficMonitor, and vice versa.
-This repo and its releases ship only the plug-in DLL, not TrafficMonitor itself.
+This repo and its releases ship the plug-in DLL plus the bundled Claude helper files, not TrafficMonitor itself.
 
 ## Build requirements
 
@@ -172,7 +188,11 @@ MSBuild.exe .\ClaudeUsagePlugin.sln /t:ClaudeUsagePlugin /p:Configuration=Releas
 Build output:
 
 - `build\x64\Release\plugins\ClaudeUsagePlugin.dll`
+- `build\x64\Release\plugins\ClaudeUsagePlugin\claude-web-helper.ps1`
+- `build\x64\Release\plugins\ClaudeUsagePlugin\helper\claude-web-helper\...`
 - `build\Release\plugins\ClaudeUsagePlugin.dll` for `Release|Win32`
+- `build\Release\plugins\ClaudeUsagePlugin\claude-web-helper.ps1`
+- `build\Release\plugins\ClaudeUsagePlugin\helper\claude-web-helper\...`
 
 The project file also contains `ARM64EC` configurations, but the published release assets are currently only `x64` and `x86`.
 
@@ -210,6 +230,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 login
 - Opens a normal browser window with the helper's dedicated local profile
 - Sign in to Claude there, then close that helper browser window
 - The login step only prepares the local profile and cookies
+- In a deployed TrafficMonitor install, the bundled script path is `.\plugins\ClaudeUsagePlugin\claude-web-helper.ps1`
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 start
@@ -218,7 +239,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 start
 - Launches the normal background refresh loop as a hidden background process
 - This is the default way to keep Claude values fresh after the one-time login
 - If a watcher is already running, it prints the current watcher PID instead of starting a duplicate
-- This is still useful as a manual recovery command, but the plugin can auto-start the bundled helper on load when these helper files are shipped next to the DLL
+- This is still useful as a manual recovery command, but the plugin can auto-start the bundled helper on load when these helper files are shipped under `plugins\ClaudeUsagePlugin`
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 status
@@ -244,7 +265,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 watch
 Operational notes:
 
 - `login` is the only interactive step. After that, `start` is the normal background mode.
-- If `claude-web-helper.ps1` plus `helper\claude-web-helper\...` are bundled next to `ClaudeUsagePlugin.dll`, the plugin now tries to auto-start the helper watcher when TrafficMonitor loads the plugin.
+- If `claude-web-helper.ps1` plus `helper\claude-web-helper\...` are bundled under `plugins\ClaudeUsagePlugin`, the plugin now tries to auto-start the helper watcher when TrafficMonitor loads the plugin.
 - `watch` is foreground troubleshooting mode. Use it only when you want console output for each refresh.
 - Close the helper browser window before `start` or `watch`, otherwise the Chromium cookies database may stay locked.
 - The helper reads the dedicated profile's `Local State` and `Cookies` database and decrypts them under the same Windows user account.
@@ -267,14 +288,14 @@ After installation or setup, check the following:
 3. The taskbar items show percentages instead of `--`.
 4. The tooltip shows reset timing for any source that exposes reset metadata.
 5. If you enabled the Claude web helper, `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-usage.json` updates after a successful helper fetch.
-6. If you use the background helper, `powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 status` shows a running watch PID and a recent helper snapshot timestamp.
+6. If you use the background helper, `powershell -ExecutionPolicy Bypass -File .\plugins\ClaudeUsagePlugin\claude-web-helper.ps1 status` shows a running watch PID and a recent helper snapshot timestamp.
 
 ## Constraints
 
 - The Claude web helper depends on an interactive Claude web login stored in its dedicated local Chromium profile.
 - Claude values depend on a fresh helper snapshot. If the helper is not running or the snapshot is stale, Claude shows unavailable.
 - Claude helper values are used only while their source is still fresh. Older values are discarded instead of being kept indefinitely.
-- The Claude web helper is not bundled as a separate installer or Windows service; you run it from this repository or package it yourself.
+- The Claude web helper is not a separate installer or Windows service; it is shipped as bundled files under `plugins\ClaudeUsagePlugin`.
 - The Claude web helper currently requires Node.js 22+ because it uses the built-in `node:sqlite` module to read the local Chromium cookies database.
 - The Claude web helper decrypts Chromium cookies through Windows DPAPI, so it must run under the same Windows user that completed the helper login.
 - Codex usage currently comes from local Codex state, not an official OpenAI usage API.
@@ -290,10 +311,10 @@ After installation or setup, check the following:
 ## Troubleshooting
 
 - Claude values show `--` or `Claude account usage unavailable`:
-  Verify that `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-usage.json` exists and was updated recently by the helper. The Claude tooltip now also surfaces the latest helper status when no fresh helper snapshot is available. `powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 status` should show a healthy watcher and recent files.
+  Verify that `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-usage.json` exists and was updated recently by the helper. The Claude tooltip now also surfaces the latest helper status when no fresh helper snapshot is available. `powershell -ExecutionPolicy Bypass -File .\plugins\ClaudeUsagePlugin\claude-web-helper.ps1 status` should show a healthy watcher and recent files.
 
 - Claude web helper status shows `login_required` or `access_denied`:
-  Run `powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 login` again and complete the Claude web login in the opened browser window.
+  Run `powershell -ExecutionPolicy Bypass -File .\plugins\ClaudeUsagePlugin\claude-web-helper.ps1 login` again and complete the Claude web login in the opened browser window.
 
 - Claude web helper status shows `profile_in_use`:
   Close the helper browser window that was opened by `login`, then run `start` again. Use `watch` only if you want foreground troubleshooting output.
