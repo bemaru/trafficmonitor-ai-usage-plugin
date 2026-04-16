@@ -36,6 +36,7 @@ public:
     };
 
     void RefreshIfNeeded();
+    void AutoStartBundledHelperIfNeeded();
     const std::wstring& GetValueText(ClaudeUsageWindow window) const;
     const Metric& GetMetric(ClaudeUsageWindow window) const;
     const std::wstring& GetTooltipText() const;
@@ -55,6 +56,7 @@ private:
     unsigned long long m_next_refresh_tick{};
     bool m_last_refresh_succeeded{};
     bool m_refresh_in_progress{};
+    bool m_helper_auto_start_attempted{};
 };
 
 #define g_claude_usage_data CClaudeUsageData::Instance()

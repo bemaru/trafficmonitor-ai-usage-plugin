@@ -16,6 +16,7 @@ constexpr unsigned long long MAX_JSON_FILE_SIZE = 1024ULL * 1024ULL;
 constexpr wchar_t PLUGIN_CACHE_DIR_NAME[] = L"trafficmonitor-claude-usage-plugin";
 constexpr wchar_t HELPER_CACHE_FILE_NAME[] = L"claude-web-usage.json";
 constexpr wchar_t HELPER_STATUS_FILE_NAME[] = L"claude-web-helper-status.json";
+constexpr wchar_t HELPER_WATCH_LOCK_FILE_NAME[] = L"claude-web-helper-watch.lock";
 
 std::wstring GetEnvVar(const wchar_t* name)
 {
@@ -85,10 +86,30 @@ std::wstring GetHelperStatusPath()
     return BuildCachePath(GetPluginCacheDir(), HELPER_STATUS_FILE_NAME);
 }
 
+std::wstring GetHelperWatchLockPath()
+{
+    return BuildCachePath(GetPluginCacheDir(), HELPER_WATCH_LOCK_FILE_NAME);
+}
+
+std::wstring GetDirectoryPath(const std::wstring& path)
+{
+    const size_t separator_pos = path.find_last_of(L"\\/");
+    if (separator_pos == std::wstring::npos)
+        return std::wstring();
+
+    return path.substr(0, separator_pos);
+}
+
 bool FileExists(const std::wstring& path)
 {
     const DWORD attributes = GetFileAttributesW(path.c_str());
     return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
+}
+
+bool DirectoryExists(const std::wstring& path)
+{
+    const DWORD attributes = GetFileAttributesW(path.c_str());
+    return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
 }
 
 bool EnsureDirectoryExists(const std::wstring& path)
@@ -161,6 +182,32 @@ bool GetFileLastWriteTimeMs(const std::wstring& path, unsigned long long& last_w
     value.HighPart = attributes.ftLastWriteTime.dwHighDateTime;
     last_write_time_ms = value.QuadPart / 10000ULL;
     return true;
+}
+
+std::wstring GetCurrentModulePath()
+{
+    HMODULE module_handle{};
+    if (!GetModuleHandleExW(
+        GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+        reinterpret_cast<LPCWSTR>(&GetCurrentModulePath),
+        &module_handle))
+    {
+        return std::wstring();
+    }
+
+    std::wstring path(MAX_PATH, L'\0');
+    DWORD length = GetModuleFileNameW(module_handle, &path[0], static_cast<DWORD>(path.size()));
+    while (length >= path.size() - 1)
+    {
+        path.resize(path.size() * 2);
+        length = GetModuleFileNameW(module_handle, &path[0], static_cast<DWORD>(path.size()));
+    }
+
+    if (length == 0)
+        return std::wstring();
+
+    path.resize(length);
+    return path;
 }
 
 bool ReadUtf8File(const std::wstring& path, std::wstring& output)
@@ -357,6 +404,124 @@ bool TryGetJsonObject(const std::wstring& json, const wchar_t* key, std::wstring
         return false;
 
     value = json.substr(value_pos, end_pos - value_pos + 1);
+    return true;
+}
+
+bool TryGetJsonInt(const std::wstring& json, const wchar_t* key, DWORD& value)
+{
+    double double_value{};
+    if (!TryGetJsonDouble(json, key, double_value))
+        return false;
+
+    if (double_value <= 0)
+        return false;
+
+    value = static_cast<DWORD>(double_value);
+    return true;
+}
+
+bool IsProcessRunning(DWORD process_id)
+{
+    if (process_id == 0)
+        return false;
+
+    HANDLE process_handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, process_id);
+    if (process_handle == nullptr)
+        return false;
+
+    DWORD exit_code{};
+    const BOOL succeeded = GetExitCodeProcess(process_handle, &exit_code);
+    CloseHandle(process_handle);
+    return succeeded && exit_code == STILL_ACTIVE;
+}
+
+bool IsHelperWatchRunning()
+{
+    const std::wstring watch_lock_path = GetHelperWatchLockPath();
+    if (watch_lock_path.empty() || !FileExists(watch_lock_path))
+        return false;
+
+    std::wstring watch_lock_json;
+    if (!ReadUtf8File(watch_lock_path, watch_lock_json))
+        return false;
+
+    DWORD process_id{};
+    if (!TryGetJsonInt(watch_lock_json, L"pid", process_id))
+        return false;
+
+    return IsProcessRunning(process_id);
+}
+
+std::wstring FindBundledHelperScriptPath()
+{
+    const std::wstring module_path = GetCurrentModulePath();
+    if (module_path.empty())
+        return std::wstring();
+
+    const std::wstring module_dir = GetDirectoryPath(module_path);
+    if (module_dir.empty())
+        return std::wstring();
+
+    const std::wstring bundled_script_path = JoinPath(module_dir, L"claude-web-helper.ps1");
+    if (FileExists(bundled_script_path))
+        return bundled_script_path;
+
+    const std::wstring build_script_path = JoinPath(module_dir, L"..\\..\\..\\scripts\\claude-web-helper.ps1");
+    if (FileExists(build_script_path))
+        return build_script_path;
+
+    const std::wstring x64_build_script_path = JoinPath(module_dir, L"..\\..\\..\\..\\scripts\\claude-web-helper.ps1");
+    if (FileExists(x64_build_script_path))
+        return x64_build_script_path;
+
+    return std::wstring();
+}
+
+bool LaunchBundledHelperStart(const std::wstring& script_path)
+{
+    if (script_path.empty() || !FileExists(script_path))
+        return false;
+
+    std::wstring powershell_path = JoinPath(TrimString(GetEnvVar(L"SystemRoot")), L"System32\\WindowsPowerShell\\v1.0\\powershell.exe");
+    if (powershell_path.empty() || !FileExists(powershell_path))
+        powershell_path = L"powershell.exe";
+
+    const std::wstring script_dir = GetDirectoryPath(script_path);
+    if (script_dir.empty() || !DirectoryExists(script_dir))
+        return false;
+
+    std::wstring command_line = L"\"";
+    command_line += powershell_path;
+    command_line += L"\" -NoProfile -ExecutionPolicy Bypass -File \"";
+    command_line += script_path;
+    command_line += L"\" start";
+
+    STARTUPINFOW startup_info{};
+    startup_info.cb = sizeof(startup_info);
+    startup_info.dwFlags = STARTF_USESHOWWINDOW;
+    startup_info.wShowWindow = SW_HIDE;
+
+    PROCESS_INFORMATION process_info{};
+    std::wstring mutable_command_line = command_line;
+    mutable_command_line.push_back(L'\0');
+
+    const BOOL created = CreateProcessW(
+        nullptr,
+        &mutable_command_line[0],
+        nullptr,
+        nullptr,
+        FALSE,
+        CREATE_NO_WINDOW,
+        nullptr,
+        script_dir.c_str(),
+        &startup_info,
+        &process_info);
+
+    if (!created)
+        return false;
+
+    CloseHandle(process_info.hThread);
+    CloseHandle(process_info.hProcess);
     return true;
 }
 
@@ -727,6 +892,24 @@ CClaudeUsageData& CClaudeUsageData::Instance()
 {
     static CClaudeUsageData instance;
     return instance;
+}
+
+void CClaudeUsageData::AutoStartBundledHelperIfNeeded()
+{
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    if (m_helper_auto_start_attempted)
+        return;
+
+    m_helper_auto_start_attempted = true;
+
+    if (IsHelperWatchRunning())
+        return;
+
+    const std::wstring script_path = FindBundledHelperScriptPath();
+    if (script_path.empty())
+        return;
+
+    LaunchBundledHelperStart(script_path);
 }
 
 void CClaudeUsageData::RefreshIfNeeded()

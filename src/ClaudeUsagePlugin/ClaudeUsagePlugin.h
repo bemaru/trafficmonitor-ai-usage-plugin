@@ -53,6 +53,7 @@ public:
     static CClaudeUsagePlugin& Instance();
 
     IPluginItem* GetItem(int index) override;
+    void OnInitialize(ITrafficMonitor* pApp) override;
     void DataRequired() override;
     const wchar_t* GetInfo(PluginInfoIndex index) override;
     const wchar_t* GetTooltipInfo() override;

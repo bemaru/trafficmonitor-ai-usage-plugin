@@ -311,6 +311,12 @@ IPluginItem* CClaudeUsagePlugin::GetItem(int index)
     }
 }
 
+void CClaudeUsagePlugin::OnInitialize(ITrafficMonitor* pApp)
+{
+    (void)pApp;
+    g_claude_usage_data.AutoStartBundledHelperIfNeeded();
+}
+
 void CClaudeUsagePlugin::DataRequired()
 {
     g_claude_usage_data.RefreshIfNeeded();
@@ -335,7 +341,7 @@ const wchar_t* CClaudeUsagePlugin::GetInfo(PluginInfoIndex index)
         value = L"Copyright (C) 2026";
         break;
     case TMI_VERSION:
-        value = L"0.3.8";
+        value = L"0.3.9";
         break;
     case TMI_URL:
         value = L"https://github.com/bemaru/trafficmonitor-ai-usage-plugin";

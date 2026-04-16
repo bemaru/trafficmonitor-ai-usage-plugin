@@ -5,8 +5,16 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
-$helperDir = Join-Path $repoRoot 'helper\claude-web-helper'
+$helperDirCandidates = @(
+    (Join-Path $PSScriptRoot 'helper\claude-web-helper'),
+    (Join-Path (Split-Path $PSScriptRoot -Parent) 'helper\claude-web-helper')
+)
+
+$helperDir = $helperDirCandidates |
+    Where-Object { Test-Path (Join-Path $_ 'package.json') } |
+    Select-Object -First 1
+
+$helperDir = if ($helperDir) { (Resolve-Path $helperDir).Path } else { $null }
 $baseDir = if ($env:LOCALAPPDATA) {
     Join-Path $env:LOCALAPPDATA 'trafficmonitor-claude-usage-plugin'
 } else {
@@ -16,8 +24,8 @@ $usagePath = Join-Path $baseDir 'claude-web-usage.json'
 $statusPath = Join-Path $baseDir 'claude-web-helper-status.json'
 $watchLockPath = Join-Path $baseDir 'claude-web-helper-watch.lock'
 
-if (-not (Test-Path (Join-Path $helperDir 'package.json'))) {
-    throw "Helper package.json not found at $helperDir"
+if (-not $helperDir) {
+    throw ("Helper package.json not found. Checked: {0}" -f ($helperDirCandidates -join ', '))
 }
 
 function Get-RelativeAgeText {

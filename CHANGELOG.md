@@ -5,11 +5,13 @@
 ### Added
 - Added an optional Claude web helper under `helper/claude-web-helper` plus the `scripts/claude-web-helper.ps1` wrapper.
 - Added helper wrapper commands for `start`, `status`, and `stop` so the Claude watcher can run in the background and be inspected without manual process hunting.
+- Added bundled helper asset copying to the plugin build output so the PowerShell wrapper and helper runtime can ship next to the DLL.
 
 ### Changed
 - Claude now reads only a fresh `claude-web-usage.json` helper snapshot for live Claude data; if that snapshot is missing or stale, Claude shows unavailable.
 - The Claude web helper now uses a dedicated local browser profile plus direct cookie-based `claude.ai` requests instead of replaying Playwright browser state.
 - The helper wrapper now reports the watch lock, helper status, and current snapshot files so local troubleshooting is simpler.
+- The plugin now tries to auto-start the bundled Claude helper watcher on plugin initialization, so TrafficMonitor restart no longer requires a manual `start` command when the helper files are deployed with the DLL.
 
 ### Fixed
 - Claude no longer keeps stale local fallback values indefinitely when the live source is unavailable.
