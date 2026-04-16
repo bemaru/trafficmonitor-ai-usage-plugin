@@ -9,7 +9,7 @@ See Claude and Codex usage limits directly in the Windows taskbar through Traffi
 This repo ships a single `ClaudeUsagePlugin.dll`, with Claude values supplied by a dedicated Claude web helper and Codex values read from local Codex state.
 Inside TrafficMonitor the plugin appears as `AI Usage Limits`, while the DLL and folder names stay `ClaudeUsagePlugin` for compatibility with the existing plugin layout.
 
-Versioning and release notes are tracked in [CHANGELOG.md](CHANGELOG.md).
+Versioning is tracked in [CHANGELOG.md](CHANGELOG.md). Release publishing helpers live in [docs/release-checklist.md](docs/release-checklist.md) and [docs/release-notes-template.md](docs/release-notes-template.md).
 
 <p align="center">
   <img src="docs/images/trafficmonitor-taskbar-compact.png" alt="TrafficMonitor taskbar showing Claude and Codex usage bars" />
@@ -160,21 +160,6 @@ Refresh behavior:
 - Codex success refresh: 60 seconds
 - Codex failure retry: 5 seconds
 
-## Install for TrafficMonitor users
-
-1. Install the official TrafficMonitor release separately.
-2. Download the release asset that matches your TrafficMonitor architecture.
-3. Copy the release contents into the TrafficMonitor `plugins` directory:
-   - `D:\Apps\TrafficMonitor\plugins\ClaudeUsagePlugin.dll`
-   - `D:\Apps\TrafficMonitor\plugins\ClaudeUsagePlugin\claude-web-helper.ps1`
-   - `D:\Apps\TrafficMonitor\plugins\ClaudeUsagePlugin\helper\claude-web-helper\...`
-4. Restart TrafficMonitor.
-5. Open plug-in management and confirm `AI Usage Limits` is loaded.
-6. Enable `Claude 5h`, `Claude 7d`, `Codex 5h`, `Codex 7d` in the displayed items list.
-
-If the plug-in loads but the items do not appear, check the DLL architecture first. An `x64` DLL will not load into `x86` TrafficMonitor, and vice versa.
-This repo and its releases ship the plug-in DLL plus the bundled Claude helper files, not TrafficMonitor itself.
-
 ## Build requirements
 
 - Windows
@@ -202,6 +187,8 @@ Build output:
 - `build\Release\plugins\ClaudeUsagePlugin\helper\claude-web-helper\...`
 
 The project file also contains `ARM64EC` configurations, but the published release assets are currently only `x64` and `x86`.
+
+For release packaging and GitHub release text, use [docs/release-checklist.md](docs/release-checklist.md) and [docs/release-notes-template.md](docs/release-notes-template.md).
 
 ## Environment and path assumptions
 
