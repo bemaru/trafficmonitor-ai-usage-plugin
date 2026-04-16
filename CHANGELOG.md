@@ -17,6 +17,7 @@
 - README now documents the taskbar-first install flow, the one-time Claude login, and the meaning of the `C5h` / `C7d` / `X5h` / `X7d` labels more clearly.
 - Added a release checklist plus a short release-notes template so private GitHub releases follow a consistent format.
 - Refreshed the compact taskbar screenshot to show the Claude/Codex-only layout more clearly.
+- Removed the deprecated Claude statusline wrapper scripts, so the repo no longer ships the unused `ccstatusline` integration path.
 
 ### Fixed
 - Claude no longer keeps stale local fallback values indefinitely when the live source is unavailable.
