@@ -529,20 +529,141 @@ bool LaunchBundledHelperStart(const std::wstring& script_path)
     return true;
 }
 
+bool TryParseFixedInt(const std::wstring& text, size_t start, size_t length, int& value)
+{
+    if (start + length > text.size() || length == 0)
+        return false;
+
+    int parsed_value{};
+    for (size_t index = start; index < start + length; ++index)
+    {
+        const wchar_t ch = text[index];
+        if (!iswdigit(ch))
+            return false;
+        parsed_value = parsed_value * 10 + (ch - L'0');
+    }
+
+    value = parsed_value;
+    return true;
+}
+
+bool TryParseFractionalMilliseconds(const std::wstring& text, size_t& position, int& millisecond)
+{
+    millisecond = 0;
+    if (position >= text.size() || text[position] != L'.')
+        return true;
+
+    ++position;
+    const size_t fraction_start = position;
+    while (position < text.size() && iswdigit(text[position]))
+        ++position;
+
+    const size_t digit_count = position - fraction_start;
+    if (digit_count == 0)
+        return false;
+
+    const size_t significant_digits = (digit_count > 3 ? 3 : digit_count);
+    int parsed_value{};
+    for (size_t index = 0; index < significant_digits; ++index)
+        parsed_value = parsed_value * 10 + (text[fraction_start + index] - L'0');
+
+    for (size_t index = significant_digits; index < 3; ++index)
+        parsed_value *= 10;
+
+    millisecond = parsed_value;
+    return true;
+}
+
+bool TryParseTimezoneOffsetMinutes(const std::wstring& text, size_t& position, int& offset_minutes)
+{
+    offset_minutes = 0;
+    if (position >= text.size())
+        return true;
+
+    if (text[position] == L'Z' || text[position] == L'z')
+    {
+        ++position;
+        return true;
+    }
+
+    if (text[position] != L'+' && text[position] != L'-')
+        return false;
+
+    const wchar_t sign = text[position];
+    ++position;
+
+    int offset_hour{};
+    int offset_minute{};
+    if (!TryParseFixedInt(text, position, 2, offset_hour))
+        return false;
+    position += 2;
+
+    if (position >= text.size() || text[position] != L':')
+        return false;
+    ++position;
+
+    if (!TryParseFixedInt(text, position, 2, offset_minute))
+        return false;
+    position += 2;
+
+    offset_minutes = offset_hour * 60 + offset_minute;
+    if (sign == L'-')
+        offset_minutes = -offset_minutes;
+    return true;
+}
+
 bool TryParseUtcIso8601(const std::wstring& text, FILETIME& file_time)
 {
+    size_t position{};
     int year{}, month{}, day{}, hour{}, minute{}, second{}, millisecond{};
-    int offset_hour{}, offset_minute{};
-    wchar_t offset_sign{};
 
-    int matched = swscanf_s(text.c_str(), L"%d-%d-%dT%d:%d:%d.%dZ", &year, &month, &day, &hour, &minute, &second, &millisecond);
-    if (matched < 6)
-        matched = swscanf_s(text.c_str(), L"%d-%d-%dT%d:%d:%dZ", &year, &month, &day, &hour, &minute, &second);
-    if (matched < 6)
-        matched = swscanf_s(text.c_str(), L"%d-%d-%dT%d:%d:%d.%d%c%d:%d", &year, &month, &day, &hour, &minute, &second, &millisecond, &offset_sign, 1, &offset_hour, &offset_minute);
-    if (matched < 6)
-        matched = swscanf_s(text.c_str(), L"%d-%d-%dT%d:%d:%d%c%d:%d", &year, &month, &day, &hour, &minute, &second, &offset_sign, 1, &offset_hour, &offset_minute);
-    if (matched < 6)
+    if (!TryParseFixedInt(text, position, 4, year))
+        return false;
+    position += 4;
+    if (position >= text.size() || text[position] != L'-')
+        return false;
+    ++position;
+
+    if (!TryParseFixedInt(text, position, 2, month))
+        return false;
+    position += 2;
+    if (position >= text.size() || text[position] != L'-')
+        return false;
+    ++position;
+
+    if (!TryParseFixedInt(text, position, 2, day))
+        return false;
+    position += 2;
+    if (position >= text.size() || (text[position] != L'T' && text[position] != L't'))
+        return false;
+    ++position;
+
+    if (!TryParseFixedInt(text, position, 2, hour))
+        return false;
+    position += 2;
+    if (position >= text.size() || text[position] != L':')
+        return false;
+    ++position;
+
+    if (!TryParseFixedInt(text, position, 2, minute))
+        return false;
+    position += 2;
+    if (position >= text.size() || text[position] != L':')
+        return false;
+    ++position;
+
+    if (!TryParseFixedInt(text, position, 2, second))
+        return false;
+    position += 2;
+
+    if (!TryParseFractionalMilliseconds(text, position, millisecond))
+        return false;
+
+    int offset_minutes{};
+    if (!TryParseTimezoneOffsetMinutes(text, position, offset_minutes))
+        return false;
+
+    if (position != text.size())
         return false;
 
     SYSTEMTIME system_time{};
@@ -552,22 +673,22 @@ bool TryParseUtcIso8601(const std::wstring& text, FILETIME& file_time)
     system_time.wHour = static_cast<WORD>(hour);
     system_time.wMinute = static_cast<WORD>(minute);
     system_time.wSecond = static_cast<WORD>(second);
-    system_time.wMilliseconds = static_cast<WORD>((matched == 7 || matched == 10) ? millisecond : 0);
+    system_time.wMilliseconds = static_cast<WORD>(millisecond);
 
     if (!SystemTimeToFileTime(&system_time, &file_time))
         return false;
 
-    if (offset_sign == L'+' || offset_sign == L'-')
+    if (offset_minutes != 0)
     {
         ULARGE_INTEGER raw_time{};
         raw_time.LowPart = file_time.dwLowDateTime;
         raw_time.HighPart = file_time.dwHighDateTime;
 
-        const unsigned long long offset_ticks =
-            (static_cast<unsigned long long>(offset_hour) * 60ULL + static_cast<unsigned long long>(offset_minute)) *
-            60ULL * 10000000ULL;
+        const unsigned long long absolute_offset_minutes =
+            static_cast<unsigned long long>(offset_minutes < 0 ? -offset_minutes : offset_minutes);
+        const unsigned long long offset_ticks = absolute_offset_minutes * 60ULL * 10000000ULL;
 
-        if (offset_sign == L'+')
+        if (offset_minutes > 0)
             raw_time.QuadPart -= offset_ticks;
         else
             raw_time.QuadPart += offset_ticks;
