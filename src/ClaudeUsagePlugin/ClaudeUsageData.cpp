@@ -1019,7 +1019,7 @@ void CClaudeUsageData::FinalizeSnapshot(Snapshot& snapshot)
 
     if (!HasAvailableMetric(snapshot))
     {
-        snapshot.tooltip_text = L"Claude account usage unavailable";
+        snapshot.tooltip_text = L"Claude usage limits unavailable";
         if (!snapshot.error_text.empty())
         {
             snapshot.tooltip_text += L"\n";
@@ -1028,7 +1028,7 @@ void CClaudeUsageData::FinalizeSnapshot(Snapshot& snapshot)
         return;
     }
 
-    snapshot.tooltip_text = L"Claude account usage";
+    snapshot.tooltip_text = L"Claude usage limits";
     snapshot.tooltip_text += L"\n";
     snapshot.tooltip_text += BuildMetricTooltip(L"5h", snapshot.rolling_5h);
     snapshot.tooltip_text += L"\n";

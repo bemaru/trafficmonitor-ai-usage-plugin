@@ -826,7 +826,7 @@ void CCodexUsageData::FinalizeSnapshot(Snapshot& snapshot)
 
     if (!HasAvailableMetric(snapshot))
     {
-        snapshot.tooltip_text = L"Codex account usage unavailable";
+        snapshot.tooltip_text = L"Codex usage limits unavailable";
         if (!snapshot.error_text.empty())
         {
             snapshot.tooltip_text += L"\n";
@@ -835,7 +835,7 @@ void CCodexUsageData::FinalizeSnapshot(Snapshot& snapshot)
         return;
     }
 
-    snapshot.tooltip_text = L"Codex account usage";
+    snapshot.tooltip_text = L"Codex usage limits";
     snapshot.tooltip_text += L"\n";
     snapshot.tooltip_text += BuildMetricTooltip(L"5h", snapshot.rolling_5h);
     snapshot.tooltip_text += L"\n";

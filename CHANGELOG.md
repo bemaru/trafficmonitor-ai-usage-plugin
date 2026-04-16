@@ -13,6 +13,8 @@
 - The helper wrapper now reports the watch lock, helper status, and current snapshot files so local troubleshooting is simpler.
 - The plugin now tries to auto-start the bundled Claude helper watcher on plugin initialization, so TrafficMonitor restart no longer requires a manual `start` command when the helper files are deployed with the DLL.
 - Bundled helper files now ship under `plugins\ClaudeUsagePlugin\...`, while `ClaudeUsagePlugin.dll` stays in the `plugins` root so TrafficMonitor can still discover the DLL.
+- Public-facing naming now uses `TrafficMonitor AI Usage Limits` and `AI Usage Limits`, while the internal DLL and folder names remain `ClaudeUsagePlugin` for compatibility.
+- README now documents the taskbar-first install flow, the one-time Claude login, and the meaning of the `C5h` / `C7d` / `X5h` / `X7d` labels more clearly.
 
 ### Fixed
 - Claude no longer keeps stale local fallback values indefinitely when the live source is unavailable.

@@ -30,7 +30,7 @@ public:
         Metric rolling_7d;
         std::wstring value_5h_text{ L"--" };
         std::wstring value_7d_text{ L"--" };
-        std::wstring tooltip_text{ L"Claude account usage unavailable" };
+        std::wstring tooltip_text{ L"Claude usage limits unavailable" };
         std::wstring error_text;
         std::wstring source_text{ L"Claude OAuth usage API" };
     };

@@ -329,10 +329,10 @@ const wchar_t* CClaudeUsagePlugin::GetInfo(PluginInfoIndex index)
     switch (index)
     {
     case TMI_NAME:
-        value = L"Claude/Codex Usage";
+        value = L"AI Usage Limits";
         break;
     case TMI_DESCRIPTION:
-        value = L"Shows Claude and Codex account usage percentages.";
+        value = L"Shows Claude and Codex usage limit percentages.";
         break;
     case TMI_AUTHOR:
         value = L"bemaru";
