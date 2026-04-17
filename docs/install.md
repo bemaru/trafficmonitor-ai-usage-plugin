@@ -94,6 +94,11 @@ That opens a browser window with the helper's dedicated profile. Sign in to Clau
 
 If your Codex state does not live in `%USERPROFILE%\.codex`, set `CODEX_HOME` in the Windows environment before launching TrafficMonitor.
 
+## Recommended TrafficMonitor settings
+
+- In `General settings`, enable `Auto run when Windows starts` if you want the taskbar usage items to come back automatically after sign-in.
+- Keep `Show Taskbar Window` enabled if you want the Claude and Codex usage items visible in the taskbar.
+
 ## Quick Verification
 
 - TrafficMonitor plug-in management shows `AI Usage Limits`
