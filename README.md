@@ -24,10 +24,14 @@ I built this because checking the [Claude usage page](https://claude.ai/settings
 
 ## Quick Start
 
-1. Install the official TrafficMonitor release and match the architecture:
+1. Install TrafficMonitor first:
+   - Download an official release from [TrafficMonitor Releases](https://github.com/zhongyang219/TrafficMonitor/releases)
+   - Extract it anywhere you want, then run `TrafficMonitor.exe`
+   - If you do not need temperature monitoring, the Lite package is usually enough
+2. Match the plugin architecture to the installed TrafficMonitor build:
    - `x64` plugin for `x64` TrafficMonitor
    - `x86` plugin for `x86` TrafficMonitor
-2. Copy the release contents into `TrafficMonitor\plugins`:
+3. Copy the release contents into `TrafficMonitor\plugins`:
 
 ```text
 plugins
@@ -41,15 +45,15 @@ plugins
          └─ package-lock.json
 ```
 
-3. Restart TrafficMonitor.
-4. Open TrafficMonitor's taskbar window and enable `Claude 5h`, `Claude 7d`, `Codex 5h`, and `Codex 7d`.
-5. Run the one-time Claude login if you want live Claude values:
+4. Restart TrafficMonitor.
+5. Open TrafficMonitor's taskbar window and enable `Claude 5h`, `Claude 7d`, `Codex 5h`, and `Codex 7d`.
+6. Run the one-time Claude login if you want live Claude values:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\plugins\ClaudeUsagePlugin\claude-web-helper.ps1 login
 ```
 
-6. If Codex state is not stored in `%USERPROFILE%\.codex`, set `CODEX_HOME` in the Windows environment before launching TrafficMonitor.
+7. If Codex state is not stored in `%USERPROFILE%\.codex`, set `CODEX_HOME` in the Windows environment before launching TrafficMonitor.
 
 If the helper files stay under `plugins\ClaudeUsagePlugin`, the bundled Claude watcher can auto-start on plugin load after that first login.
 

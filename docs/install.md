@@ -5,6 +5,15 @@ This repository ships only the plugin DLL and bundled helper files. TrafficMonit
 
 If you do not need TrafficMonitor's temperature monitoring features, the official Lite release is usually enough.
 
+## 0. Install TrafficMonitor
+
+1. Download an official package from [TrafficMonitor Releases](https://github.com/zhongyang219/TrafficMonitor/releases).
+2. Pick the architecture you actually plan to run:
+   - `x64` for normal 64-bit Windows installs
+   - `x86` only if you specifically use the 32-bit TrafficMonitor build
+3. Extract the package to any folder you want, for example `D:\Apps\TrafficMonitor`.
+4. Run `TrafficMonitor.exe` once so you know the base app starts correctly.
+
 ## 1. Match the architecture
 
 Use the plugin DLL that matches the installed TrafficMonitor architecture:
