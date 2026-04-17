@@ -63,6 +63,10 @@ For the full screenshot walkthrough, see [docs/install.md](docs/install.md).
 - `C5h`, `C7d`, `X5h`, `X7d` show used percentage, not remaining percentage
 - Tooltips show reset timing when reset metadata is available
 
+<p align="center">
+  <img src="docs/images/trafficmonitor-tooltip.png" alt="TrafficMonitor tooltip showing Claude and Codex usage limits with reset times" />
+</p>
+
 ## Data Sources
 
 - Claude reads a fresh helper snapshot from `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-usage.json`
