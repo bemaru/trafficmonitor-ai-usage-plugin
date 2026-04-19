@@ -19,7 +19,7 @@ I built this because checking the [Claude usage page](https://claude.ai/settings
 - Shows `C5h`, `C7d`, `X5h`, and `X7d` as used percentages directly in the Windows taskbar
 - Displays reset timing in the tooltip when the source exposes it
 - Uses a bundled Claude web helper for Claude values
-- Reads Codex values from local Windows-readable state with `CODEX_HOME` support
+- Reads Codex values from local session JSONL files with `CODEX_HOME` support
 - Does not keep stale Claude values forever; stale Claude data becomes unavailable
 
 ## Quick Start
@@ -54,6 +54,7 @@ powershell -ExecutionPolicy Bypass -File .\plugins\ClaudeUsagePlugin\claude-web-
 ```
 
 7. If Codex state is not stored in `%USERPROFILE%\.codex`, set `CODEX_HOME` in the Windows environment before launching TrafficMonitor.
+   Codex stays unavailable until a session JSONL file under that directory contains rate-limit payloads.
 
 If the helper files stay under `plugins\ClaudeUsagePlugin`, the bundled Claude watcher can auto-start on plugin load after that first login.
 
@@ -76,7 +77,8 @@ For the full screenshot walkthrough, see [docs/install.md](docs/install.md).
 
 - Claude reads a fresh helper snapshot from `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-usage.json`
 - Codex reads local state from `%USERPROFILE%\.codex\sessions\**\*.jsonl`
-- Falls back to `%USERPROFILE%\.codex\logs_2.sqlite` when session JSONL data is unavailable
+- Codex session JSONL files are the only supported local source; there is no `logs_2.sqlite` fallback
+- If no session JSONL file contains rate-limit payloads yet, Codex shows unavailable
 - Codex local payloads can expose either `used_percent` or `remaining_percent`; remaining values are converted to used percentage before display
 - `CODEX_HOME` overrides the default Codex path when it resolves to a Windows-readable location
 - TrafficMonitor runs on Windows, so Linux-only paths such as `/home/<user>/.codex` are not readable
@@ -132,4 +134,4 @@ For the full output layout and packaging notes, see [docs/build.md](docs/build.m
 
 - Plugin loads but the usage items do not appear: usually architecture mismatch or the items are not enabled yet. See [docs/install.md](docs/install.md) and [docs/troubleshooting.md](docs/troubleshooting.md).
 - Claude shows unavailable: usually the helper snapshot is missing, stale, or the Claude login expired. See [docs/runtime.md](docs/runtime.md) and [docs/troubleshooting.md](docs/troubleshooting.md).
-- Codex values do not appear: check `CODEX_HOME`, Windows path visibility, and whether Codex has written recent local rate-limit data. See [docs/troubleshooting.md](docs/troubleshooting.md).
+- Codex values do not appear: check `CODEX_HOME`, Windows path visibility, and whether Codex has written recent session JSONL rate-limit data. See [docs/troubleshooting.md](docs/troubleshooting.md).

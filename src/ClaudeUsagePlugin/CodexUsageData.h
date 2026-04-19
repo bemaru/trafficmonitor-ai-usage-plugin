@@ -46,7 +46,6 @@ private:
 
     bool Refresh();
     static bool LoadFromStore(Snapshot& snapshot);
-    static bool LoadFromSqliteStore(const std::wstring& store_path, Snapshot& snapshot);
     static bool LoadFromSessionJsonlStore(const std::wstring& store_dir, Snapshot& snapshot);
     static bool LoadLatestSessionJsonlFile(const std::wstring& file_path, Snapshot& snapshot);
     static void FinalizeSnapshot(Snapshot& snapshot);

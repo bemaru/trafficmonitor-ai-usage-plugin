@@ -11,7 +11,8 @@ Claude usage limits:
 Codex usage limits:
 
 - Reads local Codex usage data from `%USERPROFILE%\.codex\sessions\**\*.jsonl`
-- Falls back to `%USERPROFILE%\.codex\logs_2.sqlite` when session JSONL data is unavailable
+- Session JSONL files are the only supported Codex source; there is no `logs_2.sqlite` fallback
+- If no session JSONL file contains rate-limit payloads yet, Codex shows unavailable
 - Displays the used percentage for Codex in both the widget and tooltip
 - Converts local `remaining_percent` payloads to used percentage before display when needed
 - Respects `CODEX_HOME` when it resolves to a Windows-readable path, including WSL-style `/mnt/c/...` paths
@@ -20,6 +21,7 @@ Codex usage limits:
 
 - If `CODEX_HOME` is not set, the plugin uses `%USERPROFILE%\.codex`
 - Set `CODEX_HOME` if your Codex state lives somewhere else
+- The plugin reads the `sessions\**\*.jsonl` tree under that directory
 - Windows path example: `C:\Users\<user>\.codex`
 - WSL path example: `/mnt/c/Users/<user>/.codex`
 - Linux-only paths such as `/home/<user>/.codex` are not readable from Windows TrafficMonitor

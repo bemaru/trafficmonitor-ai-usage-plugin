@@ -52,7 +52,8 @@ Check these first:
 
 - `CODEX_HOME` or `%USERPROFILE%\.codex` resolves from the Windows TrafficMonitor process
 - The resolved path is Windows-readable
-- Codex has written recent local rate-limit data
+- At least one `sessions\**\*.jsonl` file exists under that directory
+- Codex has written recent session JSONL rate-limit data
 
 ### Codex percentage looks inverted from the Codex usage page
 
@@ -64,13 +65,15 @@ If the numbers are not simple inverses, verify that `%USERPROFILE%\.codex\sessio
 
 `CODEX_HOME` or `%USERPROFILE%\.codex` could not be resolved from the Windows TrafficMonitor process.
 
-### `Codex logs_2.sqlite unavailable`
+### `Codex sessions JSONL not found`
 
-The local Codex SQLite store exists but could not be read.
+No session JSONL files were found under the resolved Codex config directory.
+Verify `CODEX_HOME`, Windows path visibility, and that Codex has started at least one session on that profile.
 
 ### `Codex sessions JSONL returned no rate limits`
 
 Codex local session logs were found, but no rate-limit payload was present yet.
+The plugin does not fall back to another local store, so Codex stays unavailable until a session JSONL entry includes rate-limit data.
 
 ### Plug-in loads but the items do not appear
 
@@ -84,6 +87,7 @@ This is usually one of these:
 - The Claude web helper depends on an interactive Claude web login stored in its dedicated local Chromium profile
 - Claude values depend on a fresh helper snapshot
 - The Claude web helper is not a separate installer or Windows service; it is shipped as bundled files under `plugins\ClaudeUsagePlugin`
-- Codex usage currently comes from local Codex state, not an official OpenAI usage API
-- Codex values update only after Codex itself writes fresh local rate-limit data locally
+- Codex usage comes from local Codex session JSONL files, not an official OpenAI usage API
+- There is no SQLite fallback for Codex usage
+- Codex values update only after Codex itself writes fresh local rate-limit data into session JSONL files
 - This is a best-effort integration surface, not an official Anthropic or OpenAI plugin

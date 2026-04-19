@@ -16,37 +16,6 @@ constexpr unsigned long long REFRESH_INTERVAL_MS = 60ULL * 1000ULL;
 constexpr unsigned long long RETRY_INTERVAL_MS = 5ULL * 1000ULL;
 constexpr unsigned long long MAX_TEXT_FILE_SIZE = 32ULL * 1024ULL * 1024ULL;
 constexpr wchar_t CODEX_SESSION_DIR_NAME[] = L"sessions";
-constexpr wchar_t CODEX_SQLITE_FILE_NAME[] = L"logs_2.sqlite";
-constexpr wchar_t SQLITE_PRIMARY_LIBRARY[] = L"winsqlite3.dll";
-constexpr wchar_t SQLITE_FALLBACK_LIBRARY[] = L"sqlite3.dll";
-
-constexpr int SQLITE_OK = 0;
-constexpr int SQLITE_ROW = 100;
-constexpr int SQLITE_DONE = 101;
-constexpr int SQLITE_OPEN_READONLY = 0x00000001;
-
-struct sqlite3;
-struct sqlite3_stmt;
-
-using SqliteOpenV2Fn = int (*)(const char*, sqlite3**, int, const char*);
-using SqliteCloseFn = int (*)(sqlite3*);
-using SqlitePrepareV2Fn = int (*)(sqlite3*, const char*, int, sqlite3_stmt**, const char**);
-using SqliteStepFn = int (*)(sqlite3_stmt*);
-using SqliteFinalizeFn = int (*)(sqlite3_stmt*);
-using SqliteColumnTextFn = const unsigned char* (*)(sqlite3_stmt*, int);
-using SqliteColumnBytesFn = int (*)(sqlite3_stmt*, int);
-
-struct SqliteApi
-{
-    HMODULE module{};
-    SqliteOpenV2Fn open_v2{};
-    SqliteCloseFn close{};
-    SqlitePrepareV2Fn prepare_v2{};
-    SqliteStepFn step{};
-    SqliteFinalizeFn finalize{};
-    SqliteColumnTextFn column_text{};
-    SqliteColumnBytesFn column_bytes{};
-};
 
 struct SessionFileCandidate
 {
@@ -572,92 +541,6 @@ bool LoadSessionJsonlFile(const std::wstring& file_path, CCodexUsageData::Snapsh
     return true;
 }
 
-bool LoadFromSqliteUsingApi(const std::wstring& store_path, CCodexUsageData::Snapshot& snapshot)
-{
-    SqliteApi api{};
-    api.module = LoadLibraryW(SQLITE_PRIMARY_LIBRARY);
-    if (api.module == nullptr)
-        api.module = LoadLibraryW(SQLITE_FALLBACK_LIBRARY);
-    if (api.module == nullptr)
-        return false;
-
-    api.open_v2 = reinterpret_cast<SqliteOpenV2Fn>(GetProcAddress(api.module, "sqlite3_open_v2"));
-    api.close = reinterpret_cast<SqliteCloseFn>(GetProcAddress(api.module, "sqlite3_close"));
-    api.prepare_v2 = reinterpret_cast<SqlitePrepareV2Fn>(GetProcAddress(api.module, "sqlite3_prepare_v2"));
-    api.step = reinterpret_cast<SqliteStepFn>(GetProcAddress(api.module, "sqlite3_step"));
-    api.finalize = reinterpret_cast<SqliteFinalizeFn>(GetProcAddress(api.module, "sqlite3_finalize"));
-    api.column_text = reinterpret_cast<SqliteColumnTextFn>(GetProcAddress(api.module, "sqlite3_column_text"));
-    api.column_bytes = reinterpret_cast<SqliteColumnBytesFn>(GetProcAddress(api.module, "sqlite3_column_bytes"));
-
-    if (api.open_v2 == nullptr || api.close == nullptr || api.prepare_v2 == nullptr || api.step == nullptr ||
-        api.finalize == nullptr || api.column_text == nullptr || api.column_bytes == nullptr)
-    {
-        FreeLibrary(api.module);
-        return false;
-    }
-
-    int utf8_size = WideCharToMultiByte(CP_UTF8, 0, store_path.c_str(), static_cast<int>(store_path.size()), nullptr, 0, nullptr, nullptr);
-    if (utf8_size <= 0)
-    {
-        FreeLibrary(api.module);
-        return false;
-    }
-
-    std::string store_path_utf8(utf8_size, '\0');
-    WideCharToMultiByte(CP_UTF8, 0, store_path.c_str(), static_cast<int>(store_path.size()), &store_path_utf8[0], utf8_size, nullptr, nullptr);
-
-    sqlite3* database{};
-    if (api.open_v2(store_path_utf8.c_str(), &database, SQLITE_OPEN_READONLY, nullptr) != SQLITE_OK || database == nullptr)
-    {
-        FreeLibrary(api.module);
-        return false;
-    }
-
-    const char* queries[] =
-    {
-        "SELECT feedback_log_body FROM logs WHERE target = 'codex_api::endpoint::responses_websocket' AND feedback_log_body IS NOT NULL ORDER BY ts DESC, ts_nanos DESC, id DESC LIMIT 500;",
-        "SELECT feedback_log_body FROM logs WHERE feedback_log_body IS NOT NULL AND feedback_log_body LIKE '%\"rate_limits\"%' ORDER BY ts DESC, ts_nanos DESC, id DESC LIMIT 500;"
-    };
-
-    bool loaded = false;
-    for (const char* query : queries)
-    {
-        sqlite3_stmt* statement{};
-        if (api.prepare_v2(database, query, -1, &statement, nullptr) != SQLITE_OK || statement == nullptr)
-            continue;
-
-        while (api.step(statement) == SQLITE_ROW)
-        {
-            const unsigned char* text = api.column_text(statement, 0);
-            const int text_size = api.column_bytes(statement, 0);
-            if (text == nullptr || text_size <= 0)
-                continue;
-
-            std::string body(reinterpret_cast<const char*>(text), static_cast<size_t>(text_size));
-            if (body.find("\"rate_limits\"") == std::string::npos)
-                continue;
-
-            CCodexUsageData::Snapshot candidate;
-            if (LoadFromRateLimitsJson(body, candidate))
-            {
-                snapshot.rolling_5h = candidate.rolling_5h;
-                snapshot.rolling_7d = candidate.rolling_7d;
-                snapshot.source_text = L"logs_2.sqlite";
-                loaded = true;
-                break;
-            }
-        }
-
-        if (statement != nullptr)
-            api.finalize(statement);
-        if (loaded)
-            break;
-    }
-
-    api.close(database);
-    FreeLibrary(api.module);
-    return loaded;
-}
 } // namespace
 
 CCodexUsageData& CCodexUsageData::Instance()
@@ -739,11 +622,8 @@ bool CCodexUsageData::LoadFromStore(Snapshot& snapshot)
     }
 
     const std::wstring sessions_dir = GetCodexSessionsDir();
-    const std::wstring sqlite_path = JoinPath(config_dir, CODEX_SQLITE_FILE_NAME);
     const bool has_sessions_dir = DirectoryExists(sessions_dir);
-    const bool has_sqlite = FileExists(sqlite_path);
 
-    std::wstring sessions_error;
     if (has_sessions_dir)
     {
         Snapshot candidate;
@@ -752,50 +632,17 @@ bool CCodexUsageData::LoadFromStore(Snapshot& snapshot)
             snapshot = candidate;
             return true;
         }
-        sessions_error = candidate.error_text;
+        snapshot.error_text = candidate.error_text;
     }
-
-    std::wstring sqlite_error;
-    if (has_sqlite)
-    {
-        Snapshot candidate;
-        if (LoadFromSqliteStore(sqlite_path, candidate))
-        {
-            snapshot = candidate;
-            return true;
-        }
-        sqlite_error = candidate.error_text;
-    }
-
-    if (!has_sessions_dir && !has_sqlite)
-        snapshot.error_text = L"Codex store not found";
-    else if (!has_sessions_dir)
-        snapshot.error_text = (!sqlite_error.empty() ? sqlite_error : L"Codex sessions JSONL not found");
-    else if (!has_sqlite)
-        snapshot.error_text = (!sessions_error.empty() ? sessions_error : L"Codex logs_2.sqlite not found");
-    else if (!sessions_error.empty())
-        snapshot.error_text = sessions_error;
-    else if (!sqlite_error.empty())
-        snapshot.error_text = sqlite_error;
     else
+    {
+        snapshot.error_text = L"Codex sessions JSONL not found";
+    }
+
+    if (snapshot.error_text.empty())
         snapshot.error_text = L"Codex usage data unavailable";
 
     return false;
-}
-
-bool CCodexUsageData::LoadFromSqliteStore(const std::wstring& store_path, Snapshot& snapshot)
-{
-    Snapshot candidate;
-    if (!LoadFromSqliteUsingApi(store_path, candidate))
-    {
-        snapshot.error_text = L"Codex logs_2.sqlite unavailable";
-        return false;
-    }
-
-    snapshot.rolling_5h = candidate.rolling_5h;
-    snapshot.rolling_7d = candidate.rolling_7d;
-    snapshot.source_text = candidate.source_text;
-    return true;
 }
 
 bool CCodexUsageData::LoadFromSessionJsonlStore(const std::wstring& store_dir, Snapshot& snapshot)
