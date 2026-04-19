@@ -10,8 +10,10 @@ Claude usage limits:
 
 Codex usage limits:
 
-- Reads local Codex usage data from `%USERPROFILE%\.codex\logs_2.sqlite`
-- Falls back to `%USERPROFILE%\.codex\sessions\**\*.jsonl`
+- Reads local Codex usage data from `%USERPROFILE%\.codex\sessions\**\*.jsonl`
+- Falls back to `%USERPROFILE%\.codex\logs_2.sqlite` when session JSONL data is unavailable
+- Displays the used percentage for Codex in both the widget and tooltip
+- Converts local `remaining_percent` payloads to used percentage before display when needed
 - Respects `CODEX_HOME` when it resolves to a Windows-readable path, including WSL-style `/mnt/c/...` paths
 
 ## `CODEX_HOME` Notes

@@ -449,11 +449,15 @@ bool LoadMetricFromRateLimitsSection(const std::string& section_json, const char
         return false;
 
     double used_percent{};
-    if (!TryGetJsonDouble(metric_json, "used_percent", used_percent))
+    double remaining_percent{};
+    if (TryGetJsonDouble(metric_json, "used_percent", used_percent))
+        metric.percentage = used_percent;
+    else if (TryGetJsonDouble(metric_json, "remaining_percent", remaining_percent))
+        metric.percentage = 100.0 - remaining_percent;
+    else
         return false;
 
     metric.available = true;
-    metric.percentage = used_percent;
 
     long long reset_at{};
     if (TryGetJsonInt64(metric_json, "reset_at", reset_at) || TryGetJsonInt64(metric_json, "resets_at", reset_at))
@@ -734,20 +738,45 @@ bool CCodexUsageData::LoadFromStore(Snapshot& snapshot)
         return false;
     }
 
-    const std::wstring sqlite_path = JoinPath(config_dir, CODEX_SQLITE_FILE_NAME);
-    if (FileExists(sqlite_path) && LoadFromSqliteStore(sqlite_path, snapshot))
-        return true;
-
     const std::wstring sessions_dir = GetCodexSessionsDir();
-    if (DirectoryExists(sessions_dir) && LoadFromSessionJsonlStore(sessions_dir, snapshot))
-        return true;
+    const std::wstring sqlite_path = JoinPath(config_dir, CODEX_SQLITE_FILE_NAME);
+    const bool has_sessions_dir = DirectoryExists(sessions_dir);
+    const bool has_sqlite = FileExists(sqlite_path);
 
-    if (!FileExists(sqlite_path) && !DirectoryExists(sessions_dir))
+    std::wstring sessions_error;
+    if (has_sessions_dir)
+    {
+        Snapshot candidate;
+        if (LoadFromSessionJsonlStore(sessions_dir, candidate))
+        {
+            snapshot = candidate;
+            return true;
+        }
+        sessions_error = candidate.error_text;
+    }
+
+    std::wstring sqlite_error;
+    if (has_sqlite)
+    {
+        Snapshot candidate;
+        if (LoadFromSqliteStore(sqlite_path, candidate))
+        {
+            snapshot = candidate;
+            return true;
+        }
+        sqlite_error = candidate.error_text;
+    }
+
+    if (!has_sessions_dir && !has_sqlite)
         snapshot.error_text = L"Codex store not found";
-    else if (!FileExists(sqlite_path) && DirectoryExists(sessions_dir))
-        snapshot.error_text = L"Codex logs_2.sqlite not found";
-    else if (FileExists(sqlite_path) && !DirectoryExists(sessions_dir))
-        snapshot.error_text = L"Codex sessions JSONL not found";
+    else if (!has_sessions_dir)
+        snapshot.error_text = (!sqlite_error.empty() ? sqlite_error : L"Codex sessions JSONL not found");
+    else if (!has_sqlite)
+        snapshot.error_text = (!sessions_error.empty() ? sessions_error : L"Codex logs_2.sqlite not found");
+    else if (!sessions_error.empty())
+        snapshot.error_text = sessions_error;
+    else if (!sqlite_error.empty())
+        snapshot.error_text = sqlite_error;
     else
         snapshot.error_text = L"Codex usage data unavailable";
 

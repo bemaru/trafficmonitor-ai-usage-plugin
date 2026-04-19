@@ -16,7 +16,7 @@ I built this because checking the [Claude usage page](https://claude.ai/settings
 
 ## Highlights
 
-- Shows `C5h`, `C7d`, `X5h`, and `X7d` directly in the Windows taskbar
+- Shows `C5h`, `C7d`, `X5h`, and `X7d` as used percentages directly in the Windows taskbar
 - Displays reset timing in the tooltip when the source exposes it
 - Uses a bundled Claude web helper for Claude values
 - Reads Codex values from local Windows-readable state with `CODEX_HOME` support
@@ -64,8 +64,9 @@ For the full screenshot walkthrough, see [docs/install.md](docs/install.md).
 - `C` = Claude, `X` = Codex
 - `5h` = current 5-hour limit window
 - `7d` = current 7-day limit window
-- `C5h`, `C7d`, `X5h`, `X7d` show used percentage, not remaining percentage
-- Tooltips show reset timing when reset metadata is available
+- `C5h`, `C7d`, `X5h`, and `X7d` show used percentage
+- Tooltips show the same used percentage plus reset timing when reset metadata is available
+- If Codex local data reports remaining percentage, the plugin converts it before display
 
 <p align="center">
   <img src="docs/images/trafficmonitor-tooltip.png" alt="TrafficMonitor tooltip showing Claude and Codex usage limits with reset times" />
@@ -74,7 +75,9 @@ For the full screenshot walkthrough, see [docs/install.md](docs/install.md).
 ## Data Sources
 
 - Claude reads a fresh helper snapshot from `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-usage.json`
-- Codex reads local state from `%USERPROFILE%\.codex\logs_2.sqlite` or session JSONL files
+- Codex reads local state from `%USERPROFILE%\.codex\sessions\**\*.jsonl`
+- Falls back to `%USERPROFILE%\.codex\logs_2.sqlite` when session JSONL data is unavailable
+- Codex local payloads can expose either `used_percent` or `remaining_percent`; remaining values are converted to used percentage before display
 - `CODEX_HOME` overrides the default Codex path when it resolves to a Windows-readable location
 - TrafficMonitor runs on Windows, so Linux-only paths such as `/home/<user>/.codex` are not readable
 - Claude helper usage requires Node.js 22+ plus a local Edge or Chrome install

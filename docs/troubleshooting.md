@@ -6,8 +6,8 @@ After installation or setup, check the following:
 
 1. TrafficMonitor plug-in management shows `AI Usage Limits`
 2. Display settings lists `Claude 5h`, `Claude 7d`, `Codex 5h`, and `Codex 7d`
-3. The taskbar items show percentages instead of `--`
-4. The tooltip shows reset timing for any source that exposes reset metadata
+3. The taskbar items show used percentages instead of `--`
+4. The tooltip shows used percentages and reset timing for any source that exposes reset metadata
 5. If Claude helper is enabled, `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-usage.json` updates after a successful helper fetch
 
 ## Common Issues
@@ -53,6 +53,12 @@ Check these first:
 - `CODEX_HOME` or `%USERPROFILE%\.codex` resolves from the Windows TrafficMonitor process
 - The resolved path is Windows-readable
 - Codex has written recent local rate-limit data
+
+### Codex percentage looks inverted from the Codex usage page
+
+TrafficMonitor now standardizes Codex on used percentage in both the widget and tooltip.
+If the Codex usage page is showing remaining percentage for the same window, the two numbers should add up to about 100%.
+If the numbers are not simple inverses, verify that `%USERPROFILE%\.codex\sessions\**\*.jsonl` is being updated and that `CODEX_HOME` points at the same Codex profile the dashboard is using.
 
 ### `Codex config directory not found`
 
