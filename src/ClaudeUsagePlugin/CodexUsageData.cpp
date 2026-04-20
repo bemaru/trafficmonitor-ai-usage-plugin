@@ -555,6 +555,14 @@ bool CompareFileTimeNewer(const FILETIME& left, const FILETIME& right)
     return CompareFileTime(&left, &right) > 0;
 }
 
+bool IsCodexRateLimitEventLine(const std::string& line)
+{
+    return
+        line.find("\"type\":\"event_msg\"") != std::string::npos &&
+        line.find("\"payload\":{\"type\":\"token_count\"") != std::string::npos &&
+        line.find("\"rate_limits\"") != std::string::npos;
+}
+
 bool IsTimestampNewer(const std::string& left, const std::string& right)
 {
     if (left.empty())
@@ -580,7 +588,7 @@ bool LoadSessionJsonlFile(const std::wstring& file_path, const FILETIME& last_wr
     std::string line;
     while (ReadUtf8Line(file, line))
     {
-        if (line.find("\"rate_limits\"") == std::string::npos)
+        if (!IsCodexRateLimitEventLine(line))
             continue;
 
         CCodexUsageData::Snapshot candidate;
