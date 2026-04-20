@@ -23,6 +23,14 @@ struct SessionFileCandidate
     FILETIME last_write_time{};
 };
 
+struct SessionSnapshotCandidate
+{
+    CCodexUsageData::Snapshot snapshot;
+    std::string event_timestamp;
+    FILETIME file_last_write_time{};
+    std::wstring file_path;
+};
+
 std::wstring TrimString(const std::wstring& value)
 {
     size_t start{};
@@ -271,6 +279,49 @@ bool TryGetJsonObject(const std::string& json, const char* key, std::string& val
     return true;
 }
 
+bool TryGetJsonString(const std::string& json, const char* key, std::string& value)
+{
+    size_t value_pos{};
+    if (!FindJsonKey(json, key, value_pos))
+        return false;
+
+    while (value_pos < json.size() && isspace(static_cast<unsigned char>(json[value_pos])))
+        ++value_pos;
+
+    if (value_pos >= json.size() || json[value_pos] != '"')
+        return false;
+
+    ++value_pos;
+    std::string parsed;
+    bool escape = false;
+    for (size_t index = value_pos; index < json.size(); ++index)
+    {
+        const char ch = json[index];
+        if (escape)
+        {
+            parsed.push_back(ch);
+            escape = false;
+            continue;
+        }
+
+        if (ch == '\\')
+        {
+            escape = true;
+            continue;
+        }
+
+        if (ch == '"')
+        {
+            value = parsed;
+            return true;
+        }
+
+        parsed.push_back(ch);
+    }
+
+    return false;
+}
+
 bool UnixSecondsToLocalText(long long unix_seconds, std::wstring& text)
 {
     if (unix_seconds < 0)
@@ -504,7 +555,16 @@ bool CompareFileTimeNewer(const FILETIME& left, const FILETIME& right)
     return CompareFileTime(&left, &right) > 0;
 }
 
-bool LoadSessionJsonlFile(const std::wstring& file_path, CCodexUsageData::Snapshot& snapshot)
+bool IsTimestampNewer(const std::string& left, const std::string& right)
+{
+    if (left.empty())
+        return false;
+    if (right.empty())
+        return true;
+    return left > right;
+}
+
+bool LoadSessionJsonlFile(const std::wstring& file_path, const FILETIME& last_write_time, SessionSnapshotCandidate& result)
 {
     unsigned long long file_size{};
     if (!GetFileSizeBytes(file_path, file_size) || file_size > MAX_TEXT_FILE_SIZE)
@@ -516,6 +576,7 @@ bool LoadSessionJsonlFile(const std::wstring& file_path, CCodexUsageData::Snapsh
 
     bool found = false;
     CCodexUsageData::Snapshot current;
+    std::string latest_event_timestamp;
     std::string line;
     while (ReadUtf8Line(file, line))
     {
@@ -525,8 +586,20 @@ bool LoadSessionJsonlFile(const std::wstring& file_path, CCodexUsageData::Snapsh
         CCodexUsageData::Snapshot candidate;
         if (LoadFromRateLimitsJson(line, candidate))
         {
-            current = candidate;
-            found = true;
+            std::string candidate_timestamp;
+            const bool has_timestamp = TryGetJsonString(line, "timestamp", candidate_timestamp);
+            const bool take_candidate =
+                !found ||
+                (has_timestamp && IsTimestampNewer(candidate_timestamp, latest_event_timestamp)) ||
+                (!has_timestamp && latest_event_timestamp.empty());
+
+            if (take_candidate)
+            {
+                current = candidate;
+                if (has_timestamp)
+                    latest_event_timestamp = candidate_timestamp;
+                found = true;
+            }
         }
     }
 
@@ -535,9 +608,12 @@ bool LoadSessionJsonlFile(const std::wstring& file_path, CCodexUsageData::Snapsh
     if (!found)
         return false;
 
-    snapshot.rolling_5h = current.rolling_5h;
-    snapshot.rolling_7d = current.rolling_7d;
-    snapshot.source_text = L"sessions JSONL";
+    result.snapshot.rolling_5h = current.rolling_5h;
+    result.snapshot.rolling_7d = current.rolling_7d;
+    result.snapshot.source_text = L"sessions JSONL";
+    result.event_timestamp = latest_event_timestamp;
+    result.file_last_write_time = last_write_time;
+    result.file_path = file_path;
     return true;
 }
 
@@ -655,44 +731,40 @@ bool CCodexUsageData::LoadFromSessionJsonlStore(const std::wstring& store_dir, S
         return false;
     }
 
-    std::sort(
-        candidates.begin(),
-        candidates.end(),
-        [](const SessionFileCandidate& left, const SessionFileCandidate& right)
-        {
-            if (CompareFileTimeNewer(left.last_write_time, right.last_write_time))
-                return true;
-            if (CompareFileTimeNewer(right.last_write_time, left.last_write_time))
-                return false;
-            return left.path < right.path;
-        });
-
+    bool found = false;
+    SessionSnapshotCandidate best;
     for (const SessionFileCandidate& candidate : candidates)
     {
-        Snapshot parsed;
-        if (LoadLatestSessionJsonlFile(candidate.path, parsed))
+        SessionSnapshotCandidate parsed;
+        if (!LoadSessionJsonlFile(candidate.path, candidate.last_write_time, parsed))
+            continue;
+
+        const bool parsed_has_timestamp = !parsed.event_timestamp.empty();
+        const bool best_has_timestamp = !best.event_timestamp.empty();
+        const bool take_candidate =
+            !found ||
+            (parsed_has_timestamp && (!best_has_timestamp || IsTimestampNewer(parsed.event_timestamp, best.event_timestamp))) ||
+            (!parsed_has_timestamp && !best_has_timestamp &&
+                (CompareFileTimeNewer(parsed.file_last_write_time, best.file_last_write_time) ||
+                    (!CompareFileTimeNewer(best.file_last_write_time, parsed.file_last_write_time) && parsed.file_path < best.file_path)));
+
+        if (take_candidate)
         {
-            snapshot.rolling_5h = parsed.rolling_5h;
-            snapshot.rolling_7d = parsed.rolling_7d;
-            snapshot.source_text = parsed.source_text;
-            return true;
+            best = parsed;
+            found = true;
         }
+    }
+
+    if (found)
+    {
+        snapshot.rolling_5h = best.snapshot.rolling_5h;
+        snapshot.rolling_7d = best.snapshot.rolling_7d;
+        snapshot.source_text = best.snapshot.source_text;
+        return true;
     }
 
     snapshot.error_text = L"Codex sessions JSONL returned no rate limits";
     return false;
-}
-
-bool CCodexUsageData::LoadLatestSessionJsonlFile(const std::wstring& file_path, Snapshot& snapshot)
-{
-    Snapshot candidate;
-    if (!LoadSessionJsonlFile(file_path, candidate))
-        return false;
-
-    snapshot.rolling_5h = candidate.rolling_5h;
-    snapshot.rolling_7d = candidate.rolling_7d;
-    snapshot.source_text = candidate.source_text;
-    return true;
 }
 
 void CCodexUsageData::FinalizeSnapshot(Snapshot& snapshot)
