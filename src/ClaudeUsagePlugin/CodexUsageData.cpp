@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cwctype>
+#include <share.h>
 #include <string>
 #include <vector>
 
@@ -579,7 +580,8 @@ bool LoadSessionJsonlFile(const std::wstring& file_path, const FILETIME& last_wr
         return false;
 
     FILE* file{};
-    if (_wfopen_s(&file, file_path.c_str(), L"rb") != 0 || file == nullptr)
+    file = _wfsopen(file_path.c_str(), L"rb", _SH_DENYNO);
+    if (file == nullptr)
         return false;
 
     bool found = false;
