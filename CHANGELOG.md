@@ -2,11 +2,16 @@
 
 ## Unreleased
 
+No unreleased changes.
+
+## 0.3.10 - 2026-04-26
+
 ### Added
 - Added an optional Claude web helper under `helper/claude-web-helper` plus the `scripts/claude-web-helper.ps1` wrapper.
 - Added helper wrapper commands for `start`, `status`, and `stop` so the Claude watcher can run in the background and be inspected without manual process hunting.
 - Added bundled helper asset copying to the plugin build output so the PowerShell wrapper and helper runtime can ship with the plugin release layout.
 - Added license status, upstream notice, and privacy/local-data disclosure documents for public-release preparation.
+- Added GitHub Sponsors metadata and README support link.
 
 ### Changed
 - Claude now reads only a fresh `claude-web-usage.json` helper snapshot for live Claude data; if that snapshot is missing or stale, Claude shows unavailable.
@@ -17,10 +22,13 @@
 - Public-facing naming now uses `TrafficMonitor AI Usage Limits` and `AI Usage Limits`, while the internal DLL and folder names remain `ClaudeUsagePlugin` for compatibility.
 - README now documents the taskbar-first install flow, the one-time Claude login, and the meaning of the `C5h` / `C7d` / `X5h` / `X7d` labels more clearly.
 - README was shortened into a quick-start focused landing page, with detailed install/runtime/build/troubleshooting content moved into `docs/`.
-- Added a release checklist plus a short release-notes template so private GitHub releases follow a consistent format.
+- Added a release checklist plus a short release-notes template so GitHub releases follow a consistent format.
 - Release guidance now requires version consistency across the DLL, changelog, tag, release notes, and zip asset names.
 - Refreshed the compact taskbar screenshot to show the Claude/Codex-only layout more clearly.
 - Removed the deprecated Claude statusline wrapper scripts, so the repo no longer ships the unused `ccstatusline` integration path.
+- Claude and Codex taskbar items now consistently show used percentages instead of mixing used and remaining semantics.
+- Codex now uses local session JSONL files as its only usage source; the stale `logs_2.sqlite` fallback was removed.
+- README screenshots were refreshed with the current compact taskbar and tooltip layout.
 
 ### Fixed
 - Claude no longer keeps stale local fallback values indefinitely when the live source is unavailable.
@@ -28,6 +36,9 @@
 - The Claude web helper now uses the current `lastActiveOrg` cookie to call `GET /api/organizations/{orgId}/usage` directly before falling back to the broader organizations lookup, avoiding the `GET /api/organizations` 500 path that could leave Claude unavailable even with a valid signed-in web session.
 - Claude runtime now uses the helper snapshot as its only live Claude source, with a simpler `helper -> short fresh snapshot -> unavailable` model instead of OAuth/statusline/plugin-cache fallbacks.
 - Removed the remaining legacy OAuth/statusline/plugin-cache Claude runtime code paths from the DLL after the helper-only runtime simplification.
+- Codex session selection now uses the newest rate-limit event timestamp instead of JSONL file modification time.
+- Codex session parsing now ignores embedded `rate_limits` text from tool output logs.
+- Codex can now read active session JSONL files while Codex is still writing them, avoiding stale fallback values.
 
 ## 0.3.7 - 2026-04-15
 

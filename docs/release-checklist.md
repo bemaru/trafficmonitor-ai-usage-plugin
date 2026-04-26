@@ -1,6 +1,8 @@
 # Release Checklist
 
-Use this checklist whenever you publish a new private GitHub release for this plugin.
+Use this checklist whenever you prepare or publish a GitHub release for this plugin.
+
+The owner decides when the repository or release becomes public. Do not create public posts, send listing emails, or publish external announcements as part of the build/package step.
 
 ## Before tagging
 
@@ -47,9 +49,9 @@ plugins
 ## Release page
 
 1. Create a tag such as `v<version>`.
-2. Use [docs/release-notes-template.md](release-notes-template.md) as the base release note.
+2. Use [docs/release-notes-template.md](release-notes-template.md) as the base release note, or use the prepared version-specific draft when one exists.
 3. Attach newly built `x64` and `x86` zip assets from this exact source revision.
-4. Keep the repository private.
+4. Keep the repository private unless the owner explicitly approves making it public.
 5. Do not claim official Anthropic or OpenAI support.
 
 Do not attach or rename older release ZIPs for a newer tag. If the plugin DLL
@@ -63,3 +65,7 @@ also use `v0.3.10`.
 3. Confirm `Claude 5h`, `Claude 7d`, `Codex 5h`, and `Codex 7d` appear in display settings.
 4. Confirm the tooltip shows localized reset times.
 5. Confirm Claude becomes unavailable if the helper snapshot is stale instead of showing stale values forever.
+
+## Public launch
+
+After the owner approves a public launch, use [public-launch.md](public-launch.md) for the TrafficMonitor plugin listing request and Show GN / Show HN drafts.
