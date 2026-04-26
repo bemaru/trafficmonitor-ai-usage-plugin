@@ -77,6 +77,7 @@ For the full screenshot walkthrough, see [docs/install.md](docs/install.md).
 ## Data Sources
 
 - Claude reads a fresh helper snapshot from `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-usage.json`
+- Claude helper login stores cookies in a dedicated local browser profile; see [PRIVACY.md](PRIVACY.md)
 - Codex reads local state from `%USERPROFILE%\.codex\sessions\**\*.jsonl`
 - Codex session JSONL files are the only supported local source; there is no `logs_2.sqlite` fallback
 - If no session JSONL file contains rate-limit payloads yet, Codex shows unavailable
@@ -127,6 +128,9 @@ For the full output layout and packaging notes, see [docs/build.md](docs/build.m
 - [Runtime and helper guide](docs/runtime.md)
 - [Build guide](docs/build.md)
 - [Troubleshooting](docs/troubleshooting.md)
+- [Privacy and local data](PRIVACY.md)
+- [License status](LICENSE)
+- [Notices](NOTICE.md)
 - [Changelog](CHANGELOG.md)
 - [Release checklist](docs/release-checklist.md)
 - [Release notes template](docs/release-notes-template.md)

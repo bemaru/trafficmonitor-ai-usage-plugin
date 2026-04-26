@@ -1,0 +1,13 @@
+# License Status
+
+Copyright (c) 2026 bemaru. All rights reserved unless and until this
+repository is released under a specific public license by the copyright owner.
+
+This repository is not yet public-ready from a licensing perspective. Before a
+public source release or public binary release, choose an explicit project
+license and confirm that it is compatible with the TrafficMonitor plugin
+interface material noted in `NOTICE.md`.
+
+The file `include/PluginInterface.h` is copied from the upstream
+TrafficMonitor project and remains subject to the upstream TrafficMonitor
+license and notices. See `NOTICE.md` for provenance and redistribution notes.

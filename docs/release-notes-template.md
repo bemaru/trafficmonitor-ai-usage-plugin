@@ -18,6 +18,8 @@ Taskbar usage limits for Claude and Codex through TrafficMonitor.
 - `TrafficMonitorAIUsageLimits_v<version>_x86.zip`
 
 Pick the asset that matches the architecture of the installed TrafficMonitor build.
+The `<version>` value must match the plugin version reported by `AI Usage Limits`
+inside TrafficMonitor.
 
 ## Notes
 
@@ -30,3 +32,4 @@ Pick the asset that matches the architecture of the installed TrafficMonitor bui
 - Claude values require a fresh helper snapshot.
 - Codex values update only after Codex writes fresh local rate-limit data.
 - This is a best-effort integration surface, not an official Anthropic or OpenAI plugin.
+- Review the repository license, notices, and privacy disclosure before making a public release.

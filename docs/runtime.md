@@ -87,6 +87,15 @@ powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 watch
 - The helper uses only Node built-ins under `helper\claude-web-helper`; no Playwright install is required
 - If helper auth expires, the helper status file records the last failure and Claude becomes unavailable after the freshness window expires
 
+## Privacy Notes
+
+- The Claude helper profile contains Claude browser cookies for the dedicated helper login
+- The Claude helper snapshot and status files can contain usage data, organization identifiers or names, file paths, and error text
+- Codex session JSONL files can contain sensitive session content; the plugin scans them locally for rate-limit payloads
+- Do not share helper files, helper browser profiles, or Codex session JSONL files without reviewing and sanitizing them first
+
+See [../PRIVACY.md](../PRIVACY.md) for the full local-data disclosure.
+
 ## Refresh Behavior
 
 - Claude helper fresh TTL: 90 seconds

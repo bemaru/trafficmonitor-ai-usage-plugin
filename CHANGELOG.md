@@ -6,6 +6,7 @@
 - Added an optional Claude web helper under `helper/claude-web-helper` plus the `scripts/claude-web-helper.ps1` wrapper.
 - Added helper wrapper commands for `start`, `status`, and `stop` so the Claude watcher can run in the background and be inspected without manual process hunting.
 - Added bundled helper asset copying to the plugin build output so the PowerShell wrapper and helper runtime can ship with the plugin release layout.
+- Added license status, upstream notice, and privacy/local-data disclosure documents for public-release preparation.
 
 ### Changed
 - Claude now reads only a fresh `claude-web-usage.json` helper snapshot for live Claude data; if that snapshot is missing or stale, Claude shows unavailable.
@@ -17,6 +18,7 @@
 - README now documents the taskbar-first install flow, the one-time Claude login, and the meaning of the `C5h` / `C7d` / `X5h` / `X7d` labels more clearly.
 - README was shortened into a quick-start focused landing page, with detailed install/runtime/build/troubleshooting content moved into `docs/`.
 - Added a release checklist plus a short release-notes template so private GitHub releases follow a consistent format.
+- Release guidance now requires version consistency across the DLL, changelog, tag, release notes, and zip asset names.
 - Refreshed the compact taskbar screenshot to show the Claude/Codex-only layout more clearly.
 - Removed the deprecated Claude statusline wrapper scripts, so the repo no longer ships the unused `ccstatusline` integration path.
 
