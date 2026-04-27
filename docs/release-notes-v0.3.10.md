@@ -16,6 +16,7 @@ This release stabilizes the combined Claude/Codex plugin behavior and prepares t
 - Embedded `rate_limits` text from tool output logs is ignored.
 - README screenshots, install docs, runtime docs, and release docs were refreshed.
 - GitHub Sponsors metadata was added.
+- Project license, upstream notice, and privacy/local-data disclosure documents were finalized for public release.
 
 ## Assets
 

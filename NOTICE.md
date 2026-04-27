@@ -16,9 +16,8 @@ If the interface is refreshed from upstream, update this notice with the
 source commit or tag used for the copy.
 
 The upstream TrafficMonitor license is the Anti-996 License Version 1.0
-(Draft). Because this repository includes the upstream plugin interface, do not
-publish source or binary releases until the project license and redistribution
-terms have been reviewed for compatibility.
+(Draft). This repository uses the same license for the project and keeps the
+upstream interface copyright notice in `include/PluginInterface.h`.
 
 ## Bundled Helper Runtime
 

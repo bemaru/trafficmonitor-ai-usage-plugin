@@ -51,7 +51,7 @@ unless they have been sanitized.
 - TrafficMonitor itself, Windows, Edge, Chrome, Claude, Codex, and related
   services may have their own network behavior outside this plugin.
 
-## Public Release Reminder
+## Release Review
 
-Before a public release, review this document against the current runtime
-behavior, helper files, and release asset contents.
+Review this document before each release against the current runtime behavior,
+helper files, and release asset contents.

@@ -10,7 +10,7 @@ No unreleased changes.
 - Added an optional Claude web helper under `helper/claude-web-helper` plus the `scripts/claude-web-helper.ps1` wrapper.
 - Added helper wrapper commands for `start`, `status`, and `stop` so the Claude watcher can run in the background and be inspected without manual process hunting.
 - Added bundled helper asset copying to the plugin build output so the PowerShell wrapper and helper runtime can ship with the plugin release layout.
-- Added license status, upstream notice, and privacy/local-data disclosure documents for public-release preparation.
+- Added project license, upstream notice, and privacy/local-data disclosure documents for public-release preparation.
 - Added GitHub Sponsors metadata and README support link.
 
 ### Changed

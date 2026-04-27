@@ -129,7 +129,7 @@ For the full output layout and packaging notes, see [docs/build.md](docs/build.m
 - [Build guide](docs/build.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Privacy and local data](PRIVACY.md)
-- [License status](LICENSE)
+- [License](LICENSE)
 - [Notices](NOTICE.md)
 - [Changelog](CHANGELOG.md)
 - [Release checklist](docs/release-checklist.md)
