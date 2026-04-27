@@ -65,7 +65,3 @@ also use `v0.3.10`.
 3. Confirm `Claude 5h`, `Claude 7d`, `Codex 5h`, and `Codex 7d` appear in display settings.
 4. Confirm the tooltip shows localized reset times.
 5. Confirm Claude becomes unavailable if the helper snapshot is stale instead of showing stale values forever.
-
-## Public launch
-
-After the owner approves a public launch, use [public-launch.md](public-launch.md) for the TrafficMonitor plugin listing request and Show GN / Show HN drafts.

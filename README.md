@@ -134,7 +134,6 @@ For the full output layout and packaging notes, see [docs/build.md](docs/build.m
 - [Changelog](CHANGELOG.md)
 - [Release checklist](docs/release-checklist.md)
 - [Release notes template](docs/release-notes-template.md)
-- [Public launch plan](docs/public-launch.md)
 
 ## Support
 
