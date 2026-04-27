@@ -29,6 +29,7 @@ No unreleased changes.
 - Claude and Codex taskbar items now consistently show used percentages instead of mixing used and remaining semantics.
 - Codex now uses local session JSONL files as its only usage source; the stale `logs_2.sqlite` fallback was removed.
 - README screenshots were refreshed with the current compact taskbar and tooltip layout.
+- Release zip assets now include `LICENSE`, `NOTICE.md`, and `PRIVACY.md` at the root.
 
 ### Fixed
 - Claude no longer keeps stale local fallback values indefinitely when the live source is unavailable.

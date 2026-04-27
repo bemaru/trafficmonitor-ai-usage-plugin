@@ -24,6 +24,7 @@ This release stabilizes the combined Claude/Codex plugin behavior and prepares t
 - `TrafficMonitorAIUsageLimits_v0.3.10_x86.zip`
 
 Pick the asset that matches the architecture of the installed TrafficMonitor build.
+Each zip includes `LICENSE`, `NOTICE.md`, and `PRIVACY.md` at the root.
 
 ## Notes
 

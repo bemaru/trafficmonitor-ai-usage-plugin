@@ -23,6 +23,8 @@ The owner decides when the repository or release becomes public. Do not create p
    - `ClaudeUsagePlugin.dll`
    - `ClaudeUsagePlugin\claude-web-helper.ps1`
    - `ClaudeUsagePlugin\helper\claude-web-helper\...`
+8. Confirm the release zip includes `LICENSE`, `NOTICE.md`, and `PRIVACY.md`
+   at the zip root.
 
 ## Package assets
 
@@ -35,6 +37,9 @@ Create one zip per architecture from the built `plugins` output.
 Each zip should contain this layout:
 
 ```text
+LICENSE
+NOTICE.md
+PRIVACY.md
 plugins
 ├─ ClaudeUsagePlugin.dll
 └─ ClaudeUsagePlugin
