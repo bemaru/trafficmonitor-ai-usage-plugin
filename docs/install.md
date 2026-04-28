@@ -21,25 +21,29 @@ Use the plugin DLL that matches the installed TrafficMonitor architecture:
 - `x64` plugin for `x64` TrafficMonitor
 - `x86` plugin for `x86` TrafficMonitor
 
-## 2. Copy the plugin files
+## 2. Extract the plugin files
 
-Copy the release contents into the TrafficMonitor `plugins` directory:
+Download the plugin zip that matches the installed TrafficMonitor architecture from the [latest release](https://github.com/bemaru/trafficmonitor-ai-usage-plugin/releases/latest), then extract it into the TrafficMonitor folder that contains `TrafficMonitor.exe`.
+
+After extraction, the layout should look like this:
 
 ```text
-plugins
-├─ ClaudeUsagePlugin.dll
-└─ ClaudeUsagePlugin
-   ├─ claude-web-helper.ps1
-   └─ helper
-      └─ claude-web-helper
-         ├─ index.mjs
-         ├─ package.json
-         └─ package-lock.json
+TrafficMonitor
+├─ TrafficMonitor.exe
+└─ plugins
+   ├─ ClaudeUsagePlugin.dll
+   └─ ClaudeUsagePlugin
+      ├─ claude-web-helper.ps1
+      └─ helper
+         └─ claude-web-helper
+            ├─ index.mjs
+            ├─ package.json
+            └─ package-lock.json
 ```
 
 ## 3. Restart TrafficMonitor
 
-After copying the files, restart TrafficMonitor.
+After extracting the files, restart TrafficMonitor.
 
 ## 4. Show the taskbar window
 

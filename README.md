@@ -9,7 +9,7 @@
 Languages: English | [한국어](README.ko.md) | [简体中文](README.zh-CN.md)
 
 Taskbar usage limits for Claude and Codex through [TrafficMonitor](https://github.com/zhongyang219/TrafficMonitor) on Windows.
-This repo ships a single `ClaudeUsagePlugin.dll`. Inside TrafficMonitor, the plugin appears as `AI Usage Limits`.
+Release packages include `ClaudeUsagePlugin.dll` plus the bundled helper files. Inside TrafficMonitor, the plugin appears as `AI Usage Limits`.
 
 <p align="center">
   <img src="docs/images/trafficmonitor-taskbar-compact.png" alt="TrafficMonitor taskbar showing Claude and Codex usage bars" />
@@ -33,21 +33,24 @@ The plugin puts Claude and Codex usage limits in that fixed taskbar location, in
    - Download an official release from [TrafficMonitor Releases](https://github.com/zhongyang219/TrafficMonitor/releases)
    - Extract it anywhere you want, then run `TrafficMonitor.exe`
    - If you do not need temperature monitoring, the Lite package is usually enough
-2. Match the plugin architecture to the installed TrafficMonitor build:
-   - `x64` plugin for `x64` TrafficMonitor
-   - `x86` plugin for `x86` TrafficMonitor
-3. Copy the release contents into `TrafficMonitor\plugins`:
+2. Download the plugin zip that matches the installed TrafficMonitor build from the [latest release](https://github.com/bemaru/trafficmonitor-ai-usage-plugin/releases/latest):
+   - `TrafficMonitorAIUsageLimits_v0.3.10_x64.zip` for `x64` TrafficMonitor
+   - `TrafficMonitorAIUsageLimits_v0.3.10_x86.zip` for `x86` TrafficMonitor
+3. Extract the zip into the TrafficMonitor folder, the folder that contains `TrafficMonitor.exe`.
+   After extraction, the layout should look like this:
 
 ```text
-plugins
-├─ ClaudeUsagePlugin.dll
-└─ ClaudeUsagePlugin
-   ├─ claude-web-helper.ps1
-   └─ helper
-      └─ claude-web-helper
-         ├─ index.mjs
-         ├─ package.json
-         └─ package-lock.json
+TrafficMonitor
+├─ TrafficMonitor.exe
+└─ plugins
+   ├─ ClaudeUsagePlugin.dll
+   └─ ClaudeUsagePlugin
+      ├─ claude-web-helper.ps1
+      └─ helper
+         └─ claude-web-helper
+            ├─ index.mjs
+            ├─ package.json
+            └─ package-lock.json
 ```
 
 4. Restart TrafficMonitor.

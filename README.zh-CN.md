@@ -9,7 +9,7 @@
 语言: [English](README.md) | [한국어](README.ko.md) | 简体中文
 
 这是一个用于 Windows [TrafficMonitor](https://github.com/zhongyang219/TrafficMonitor) 的插件，可以在任务栏中显示 Claude 和 Codex 的用量限制状态。
-本仓库发布一个 `ClaudeUsagePlugin.dll`。在 TrafficMonitor 中，插件显示为 `AI Usage Limits`。
+发布包包含 `ClaudeUsagePlugin.dll` 和随插件附带的 helper 文件。在 TrafficMonitor 中，插件显示为 `AI Usage Limits`。
 
 <p align="center">
   <img src="docs/images/trafficmonitor-taskbar-compact.png" alt="TrafficMonitor 任务栏显示 Claude 和 Codex 使用量条" />
@@ -33,21 +33,24 @@
    - 从 [TrafficMonitor Releases](https://github.com/zhongyang219/TrafficMonitor/releases) 下载官方版本。
    - 解压到任意目录，然后运行 `TrafficMonitor.exe`。
    - 如果不需要温度监控，通常 Lite 包就够用。
-2. 根据已安装的 TrafficMonitor 架构选择插件。
-   - `x64` TrafficMonitor 使用 `x64` 插件
-   - `x86` TrafficMonitor 使用 `x86` 插件
-3. 将 release zip 的内容复制到 `TrafficMonitor\plugins`。
+2. 从 [latest release](https://github.com/bemaru/trafficmonitor-ai-usage-plugin/releases/latest) 下载与已安装 TrafficMonitor 架构匹配的插件 zip。
+   - `x64` TrafficMonitor 使用 `TrafficMonitorAIUsageLimits_v0.3.10_x64.zip`
+   - `x86` TrafficMonitor 使用 `TrafficMonitorAIUsageLimits_v0.3.10_x86.zip`
+3. 将 zip 解压到包含 `TrafficMonitor.exe` 的 TrafficMonitor 文件夹中。
+   解压后的结构应如下所示。
 
 ```text
-plugins
-├─ ClaudeUsagePlugin.dll
-└─ ClaudeUsagePlugin
-   ├─ claude-web-helper.ps1
-   └─ helper
-      └─ claude-web-helper
-         ├─ index.mjs
-         ├─ package.json
-         └─ package-lock.json
+TrafficMonitor
+├─ TrafficMonitor.exe
+└─ plugins
+   ├─ ClaudeUsagePlugin.dll
+   └─ ClaudeUsagePlugin
+      ├─ claude-web-helper.ps1
+      └─ helper
+         └─ claude-web-helper
+            ├─ index.mjs
+            ├─ package.json
+            └─ package-lock.json
 ```
 
 4. 重启 TrafficMonitor。
