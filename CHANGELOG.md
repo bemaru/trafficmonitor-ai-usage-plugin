@@ -9,6 +9,9 @@
 - Clarified why the plugin uses TrafficMonitor's taskbar surface for AI usage-limit visibility.
 - Clarified that release zips should be extracted into the TrafficMonitor folder, not into `TrafficMonitor\plugins`.
 
+### Fixed
+- Stabilized Codex metric selection when multiple session JSONL files write conflicting rate-limit reset windows under the same profile.
+
 ## 0.3.10 - 2026-04-26
 
 ### Added

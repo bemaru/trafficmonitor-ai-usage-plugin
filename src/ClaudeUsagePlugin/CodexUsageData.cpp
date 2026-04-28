@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cwctype>
+#include <climits>
 #include <share.h>
 #include <string>
 #include <vector>
@@ -16,6 +17,7 @@ namespace
 constexpr unsigned long long REFRESH_INTERVAL_MS = 60ULL * 1000ULL;
 constexpr unsigned long long RETRY_INTERVAL_MS = 5ULL * 1000ULL;
 constexpr unsigned long long MAX_TEXT_FILE_SIZE = 32ULL * 1024ULL * 1024ULL;
+constexpr long long RECENT_EVENT_WINDOW_SECONDS = 15LL * 60LL;
 constexpr wchar_t CODEX_SESSION_DIR_NAME[] = L"sessions";
 
 struct SessionFileCandidate
@@ -28,8 +30,17 @@ struct SessionSnapshotCandidate
 {
     CCodexUsageData::Snapshot snapshot;
     std::string event_timestamp;
+    bool has_event_unix_seconds{};
+    long long event_unix_seconds{};
     FILETIME file_last_write_time{};
     std::wstring file_path;
+};
+
+struct MetricSelection
+{
+    bool found{};
+    CCodexUsageData::Metric metric;
+    std::string event_timestamp;
 };
 
 std::wstring TrimString(const std::wstring& value)
@@ -323,6 +334,39 @@ bool TryGetJsonString(const std::string& json, const char* key, std::string& val
     return false;
 }
 
+bool TryParseIso8601UtcSeconds(const std::string& timestamp, long long& unix_seconds)
+{
+    int year{};
+    int month{};
+    int day{};
+    int hour{};
+    int minute{};
+    int second{};
+    if (sscanf_s(timestamp.c_str(), "%4d-%2d-%2dT%2d:%2d:%2d", &year, &month, &day, &hour, &minute, &second) != 6)
+        return false;
+
+    SYSTEMTIME utc_time{};
+    utc_time.wYear = static_cast<WORD>(year);
+    utc_time.wMonth = static_cast<WORD>(month);
+    utc_time.wDay = static_cast<WORD>(day);
+    utc_time.wHour = static_cast<WORD>(hour);
+    utc_time.wMinute = static_cast<WORD>(minute);
+    utc_time.wSecond = static_cast<WORD>(second);
+
+    FILETIME file_time{};
+    if (!SystemTimeToFileTime(&utc_time, &file_time))
+        return false;
+
+    ULARGE_INTEGER value{};
+    value.LowPart = file_time.dwLowDateTime;
+    value.HighPart = file_time.dwHighDateTime;
+    if (value.QuadPart < 116444736000000000ULL)
+        return false;
+
+    unix_seconds = static_cast<long long>((value.QuadPart - 116444736000000000ULL) / 10000000ULL);
+    return true;
+}
+
 bool UnixSecondsToLocalText(long long unix_seconds, std::wstring& text)
 {
     if (unix_seconds < 0)
@@ -573,6 +617,78 @@ bool IsTimestampNewer(const std::string& left, const std::string& right)
     return left > right;
 }
 
+bool IsMetricBetterForSelection(const CCodexUsageData::Metric& metric, const std::string& event_timestamp, const MetricSelection& current)
+{
+    if (!metric.available)
+        return false;
+
+    if (!current.found)
+        return true;
+
+    if (metric.has_reset_time && current.metric.has_reset_time)
+    {
+        if (metric.reset_at_unix_seconds != current.metric.reset_at_unix_seconds)
+            return metric.reset_at_unix_seconds > current.metric.reset_at_unix_seconds;
+    }
+    else if (metric.has_reset_time != current.metric.has_reset_time)
+    {
+        return metric.has_reset_time;
+    }
+
+    return IsTimestampNewer(event_timestamp, current.event_timestamp);
+}
+
+void ConsiderMetricForSelection(const CCodexUsageData::Metric& metric, const std::string& event_timestamp, MetricSelection& selection)
+{
+    if (!IsMetricBetterForSelection(metric, event_timestamp, selection))
+        return;
+
+    selection.found = true;
+    selection.metric = metric;
+    selection.event_timestamp = event_timestamp;
+}
+
+void SelectMetricsFromCandidates(
+    const std::vector<SessionSnapshotCandidate>& candidates,
+    bool recent_only,
+    long long newest_event_unix_seconds,
+    MetricSelection& five_hour,
+    MetricSelection& seven_day)
+{
+    for (const SessionSnapshotCandidate& candidate : candidates)
+    {
+        if (recent_only)
+        {
+            if (!candidate.has_event_unix_seconds)
+                continue;
+            if (newest_event_unix_seconds - candidate.event_unix_seconds > RECENT_EVENT_WINDOW_SECONDS)
+                continue;
+        }
+
+        ConsiderMetricForSelection(candidate.snapshot.rolling_5h, candidate.event_timestamp, five_hour);
+        ConsiderMetricForSelection(candidate.snapshot.rolling_7d, candidate.event_timestamp, seven_day);
+    }
+}
+
+void SelectMissingMetricsFromCandidates(
+    const std::vector<SessionSnapshotCandidate>& candidates,
+    MetricSelection& five_hour,
+    MetricSelection& seven_day)
+{
+    MetricSelection fallback_five_hour;
+    MetricSelection fallback_seven_day;
+    for (const SessionSnapshotCandidate& candidate : candidates)
+    {
+        ConsiderMetricForSelection(candidate.snapshot.rolling_5h, candidate.event_timestamp, fallback_five_hour);
+        ConsiderMetricForSelection(candidate.snapshot.rolling_7d, candidate.event_timestamp, fallback_seven_day);
+    }
+
+    if (!five_hour.found && fallback_five_hour.found)
+        five_hour = fallback_five_hour;
+    if (!seven_day.found && fallback_seven_day.found)
+        seven_day = fallback_seven_day;
+}
+
 bool LoadSessionJsonlFile(const std::wstring& file_path, const FILETIME& last_write_time, SessionSnapshotCandidate& result)
 {
     unsigned long long file_size{};
@@ -587,6 +703,8 @@ bool LoadSessionJsonlFile(const std::wstring& file_path, const FILETIME& last_wr
     bool found = false;
     CCodexUsageData::Snapshot current;
     std::string latest_event_timestamp;
+    bool latest_has_event_unix_seconds = false;
+    long long latest_event_unix_seconds = 0;
     std::string line;
     while (ReadUtf8Line(file, line))
     {
@@ -598,6 +716,9 @@ bool LoadSessionJsonlFile(const std::wstring& file_path, const FILETIME& last_wr
         {
             std::string candidate_timestamp;
             const bool has_timestamp = TryGetJsonString(line, "timestamp", candidate_timestamp);
+            long long candidate_event_unix_seconds{};
+            const bool has_event_unix_seconds =
+                has_timestamp && TryParseIso8601UtcSeconds(candidate_timestamp, candidate_event_unix_seconds);
             const bool take_candidate =
                 !found ||
                 (has_timestamp && IsTimestampNewer(candidate_timestamp, latest_event_timestamp)) ||
@@ -608,6 +729,8 @@ bool LoadSessionJsonlFile(const std::wstring& file_path, const FILETIME& last_wr
                 current = candidate;
                 if (has_timestamp)
                     latest_event_timestamp = candidate_timestamp;
+                latest_has_event_unix_seconds = has_event_unix_seconds;
+                latest_event_unix_seconds = candidate_event_unix_seconds;
                 found = true;
             }
         }
@@ -622,6 +745,8 @@ bool LoadSessionJsonlFile(const std::wstring& file_path, const FILETIME& last_wr
     result.snapshot.rolling_7d = current.rolling_7d;
     result.snapshot.source_text = L"sessions JSONL";
     result.event_timestamp = latest_event_timestamp;
+    result.has_event_unix_seconds = latest_has_event_unix_seconds;
+    result.event_unix_seconds = latest_event_unix_seconds;
     result.file_last_write_time = last_write_time;
     result.file_path = file_path;
     return true;
@@ -741,35 +866,47 @@ bool CCodexUsageData::LoadFromSessionJsonlStore(const std::wstring& store_dir, S
         return false;
     }
 
-    bool found = false;
-    SessionSnapshotCandidate best;
+    std::vector<SessionSnapshotCandidate> parsed_candidates;
+    bool has_newest_event_unix_seconds = false;
+    long long newest_event_unix_seconds = LLONG_MIN;
     for (const SessionFileCandidate& candidate : candidates)
     {
         SessionSnapshotCandidate parsed;
         if (!LoadSessionJsonlFile(candidate.path, candidate.last_write_time, parsed))
             continue;
 
-        const bool parsed_has_timestamp = !parsed.event_timestamp.empty();
-        const bool best_has_timestamp = !best.event_timestamp.empty();
-        const bool take_candidate =
-            !found ||
-            (parsed_has_timestamp && (!best_has_timestamp || IsTimestampNewer(parsed.event_timestamp, best.event_timestamp))) ||
-            (!parsed_has_timestamp && !best_has_timestamp &&
-                (CompareFileTimeNewer(parsed.file_last_write_time, best.file_last_write_time) ||
-                    (!CompareFileTimeNewer(best.file_last_write_time, parsed.file_last_write_time) && parsed.file_path < best.file_path)));
-
-        if (take_candidate)
+        if (parsed.has_event_unix_seconds)
         {
-            best = parsed;
-            found = true;
+            if (!has_newest_event_unix_seconds || parsed.event_unix_seconds > newest_event_unix_seconds)
+            {
+                newest_event_unix_seconds = parsed.event_unix_seconds;
+                has_newest_event_unix_seconds = true;
+            }
         }
+
+        parsed_candidates.push_back(parsed);
     }
 
-    if (found)
+    if (!parsed_candidates.empty())
     {
-        snapshot.rolling_5h = best.snapshot.rolling_5h;
-        snapshot.rolling_7d = best.snapshot.rolling_7d;
-        snapshot.source_text = best.snapshot.source_text;
+        MetricSelection five_hour;
+        MetricSelection seven_day;
+
+        // Multiple active sessions can write conflicting rate-limit windows.
+        // Within recent events, prefer the newest reset window and use the event
+        // timestamp only as a tie-breaker so stale windows do not flicker back.
+        if (has_newest_event_unix_seconds)
+            SelectMetricsFromCandidates(parsed_candidates, true, newest_event_unix_seconds, five_hour, seven_day);
+
+        if (!five_hour.found || !seven_day.found)
+            SelectMissingMetricsFromCandidates(parsed_candidates, five_hour, seven_day);
+
+        if (five_hour.found)
+            snapshot.rolling_5h = five_hour.metric;
+        if (seven_day.found)
+            snapshot.rolling_7d = seven_day.metric;
+
+        snapshot.source_text = L"sessions JSONL";
         return true;
     }
 

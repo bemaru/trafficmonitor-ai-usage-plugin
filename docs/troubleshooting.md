@@ -61,6 +61,11 @@ TrafficMonitor now standardizes Codex on used percentage in both the widget and 
 If the Codex usage page is showing remaining percentage for the same window, the two numbers should add up to about 100%.
 If the numbers are not simple inverses, verify that `%USERPROFILE%\.codex\sessions\**\*.jsonl` is being updated and that `CODEX_HOME` points at the same Codex profile the dashboard is using.
 
+### Codex values jump between different weekly reset times
+
+`CODEX_HOME` controls which Codex profile directory TrafficMonitor reads, but multiple session JSONL files inside the same profile can still be active at the same time.
+If those sessions write conflicting rate-limit windows, the plugin prefers the newest observed reset window from recent events instead of letting an older reset window overwrite it only because that session wrote a token-count event later.
+
 ### `Codex config directory not found`
 
 `CODEX_HOME` or `%USERPROFILE%\.codex` could not be resolved from the Windows TrafficMonitor process.
