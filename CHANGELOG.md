@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.11 - 2026-04-28
+
 ### Added
 - Added Korean and Simplified Chinese README translations.
 

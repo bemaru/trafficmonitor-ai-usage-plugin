@@ -34,8 +34,8 @@
    - 解压到任意目录，然后运行 `TrafficMonitor.exe`。
    - 如果不需要温度监控，通常 Lite 包就够用。
 2. 从 [latest release](https://github.com/bemaru/trafficmonitor-ai-usage-plugin/releases/latest) 下载与已安装 TrafficMonitor 架构匹配的插件 zip。
-   - `x64` TrafficMonitor 使用 `TrafficMonitorAIUsageLimits_v0.3.10_x64.zip`
-   - `x86` TrafficMonitor 使用 `TrafficMonitorAIUsageLimits_v0.3.10_x86.zip`
+   - `x64` TrafficMonitor 使用 `TrafficMonitorAIUsageLimits_v0.3.11_x64.zip`
+   - `x86` TrafficMonitor 使用 `TrafficMonitorAIUsageLimits_v0.3.11_x86.zip`
 3. 将 zip 解压到包含 `TrafficMonitor.exe` 的 TrafficMonitor 文件夹中。
    解压后的结构应如下所示。
 

@@ -59,9 +59,9 @@ plugins
 4. Keep the repository private unless the owner explicitly approves making it public.
 5. Do not claim official Anthropic or OpenAI support.
 
-Do not attach or rename older release ZIPs for a newer tag. If the plugin DLL
-reports `0.3.10`, the tag, changelog entry, release title, and asset names must
-also use `v0.3.10`.
+Do not attach or rename older release ZIPs for a newer tag. The plugin DLL
+version, tag, changelog entry, release title, and asset names must all use the
+same version.
 
 ## Final smoke check
 

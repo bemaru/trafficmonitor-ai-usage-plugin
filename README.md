@@ -34,8 +34,8 @@ The plugin puts Claude and Codex usage limits in that fixed taskbar location, in
    - Extract it anywhere you want, then run `TrafficMonitor.exe`
    - If you do not need temperature monitoring, the Lite package is usually enough
 2. Download the plugin zip that matches the installed TrafficMonitor build from the [latest release](https://github.com/bemaru/trafficmonitor-ai-usage-plugin/releases/latest):
-   - `TrafficMonitorAIUsageLimits_v0.3.10_x64.zip` for `x64` TrafficMonitor
-   - `TrafficMonitorAIUsageLimits_v0.3.10_x86.zip` for `x86` TrafficMonitor
+   - `TrafficMonitorAIUsageLimits_v0.3.11_x64.zip` for `x64` TrafficMonitor
+   - `TrafficMonitorAIUsageLimits_v0.3.11_x86.zip` for `x86` TrafficMonitor
 3. Extract the zip into the TrafficMonitor folder, the folder that contains `TrafficMonitor.exe`.
    After extraction, the layout should look like this:
 
