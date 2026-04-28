@@ -5,6 +5,9 @@
 ### Added
 - Added Korean and Simplified Chinese README translations.
 
+### Changed
+- Clarified why the plugin uses TrafficMonitor's taskbar surface for AI usage-limit visibility.
+
 ## 0.3.10 - 2026-04-26
 
 ### Added

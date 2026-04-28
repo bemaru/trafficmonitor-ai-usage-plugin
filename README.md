@@ -15,7 +15,9 @@ This repo ships a single `ClaudeUsagePlugin.dll`. Inside TrafficMonitor, the plu
   <img src="docs/images/trafficmonitor-taskbar-compact.png" alt="TrafficMonitor taskbar showing Claude and Codex usage bars" />
 </p>
 
-I built this because checking the [Claude usage page](https://claude.ai/settings/usage) and the [Codex usage page](https://chatgpt.com/codex/cloud/settings/usage) in separate tabs was annoying. TrafficMonitor already had the right taskbar surface, so this plugin puts the current usage-limit windows there directly.
+I built this because Windows did not have a convenient widget for this kind of AI usage-limit status. Claude usage can already be checked from places like Claude Code statusline, Claude Desktop, or Claude's VS Code extension, but those surfaces depend on the current workflow. The Windows taskbar stays visible across editors, terminals, and browsers, so TrafficMonitor's taskbar plugin surface was a good fit.
+
+The plugin puts Claude and Codex usage limits in that fixed taskbar location, instead of requiring separate usage pages to stay open.
 
 ## Highlights
 

@@ -15,7 +15,9 @@
   <img src="docs/images/trafficmonitor-taskbar-compact.png" alt="TrafficMonitor 任务栏显示 Claude 和 Codex 使用量条" />
 </p>
 
-我开发这个插件，是因为经常需要分别打开 [Claude usage page](https://claude.ai/settings/usage) 和 [Codex usage page](https://chatgpt.com/codex/cloud/settings/usage) 查看限制状态。TrafficMonitor 已经提供了轻量的任务栏显示区域，因此这个插件可以把当前用量限制直接显示在那里。
+我开发这个插件，是因为 Windows 上缺少一个合适的小工具来查看这类 AI 用量限制状态。Claude 用量虽然可以通过 Claude Code statusline、Claude Desktop 或 Claude 的 VS Code 扩展查看，但这些界面会随着当前工作环境变化。Windows 任务栏则会在编辑器、终端和浏览器之间切换时一直保持可见，因此 TrafficMonitor 的任务栏插件形式很适合这个用途。
+
+这个插件把 Claude 和 Codex 的用量限制放在固定的任务栏位置，不需要一直打开单独的用量页面。
 
 ## 主要功能
 
