@@ -6,6 +6,8 @@
 ![Usage Sources](https://img.shields.io/badge/usage-Claude%20%2B%20Codex-0A7F5A)
 [![GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-support-30363D?logo=githubsponsors&logoColor=EA4AAA)](https://github.com/sponsors/bemaru)
 
+Languages: English | [한국어](README.ko.md) | [简体中文](README.zh-CN.md)
+
 Taskbar usage limits for Claude and Codex through [TrafficMonitor](https://github.com/zhongyang219/TrafficMonitor) on Windows.
 This repo ships a single `ClaudeUsagePlugin.dll`. Inside TrafficMonitor, the plugin appears as `AI Usage Limits`.
 
