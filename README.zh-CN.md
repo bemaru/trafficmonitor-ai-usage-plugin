@@ -8,22 +8,22 @@
 
 语言: [English](README.md) | [한국어](README.ko.md) | 简体中文
 
-这是一个用于 Windows [TrafficMonitor](https://github.com/zhongyang219/TrafficMonitor) 的插件，可以在任务栏中显示 Claude 和 Codex 的使用限制状态。
+这是一个用于 Windows [TrafficMonitor](https://github.com/zhongyang219/TrafficMonitor) 的插件，可以在任务栏中显示 Claude 和 Codex 的用量限制状态。
 本仓库发布一个 `ClaudeUsagePlugin.dll`。在 TrafficMonitor 中，插件显示为 `AI Usage Limits`。
 
 <p align="center">
   <img src="docs/images/trafficmonitor-taskbar-compact.png" alt="TrafficMonitor 任务栏显示 Claude 和 Codex 使用量条" />
 </p>
 
-我开发这个插件，是因为经常需要分别打开 [Claude usage page](https://claude.ai/settings/usage) 和 [Codex usage page](https://chatgpt.com/codex/cloud/settings/usage) 查看限制状态。TrafficMonitor 已经提供了轻量的任务栏显示区域，因此这个插件把当前使用限制直接放到那里。
+我开发这个插件，是因为经常需要分别打开 [Claude usage page](https://claude.ai/settings/usage) 和 [Codex usage page](https://chatgpt.com/codex/cloud/settings/usage) 查看限制状态。TrafficMonitor 已经提供了轻量的任务栏显示区域，因此这个插件可以把当前用量限制直接显示在那里。
 
 ## 主要功能
 
 - 在 Windows 任务栏中以已使用百分比显示 `C5h`, `C7d`, `X5h`, `X7d`
-- 当数据源提供 reset 信息时，在 tooltip 中显示重置时间
+- 当数据源提供重置时间信息时，在 tooltip 中显示重置时间
 - Claude 数值来自随插件发布的 Claude web helper
 - Codex 数值来自本地 session JSONL 文件，并支持 `CODEX_HOME`
-- 不会长期保留过期 Claude 数据，过期后会显示 unavailable
+- 不会长期保留过期 Claude 数据，过期后会显示 unavailable 状态
 
 ## 快速开始
 
@@ -66,10 +66,10 @@ powershell -ExecutionPolicy Bypass -File .\plugins\ClaudeUsagePlugin\claude-web-
 ## 显示内容
 
 - `C` = Claude, `X` = Codex
-- `5h` = 当前 5 小时限制窗口
-- `7d` = 当前 7 天限制窗口
+- `5h` = 当前 5 小时限制周期
+- `7d` = 当前 7 天限制周期
 - `C5h`, `C7d`, `X5h`, `X7d` 显示已使用百分比
-- tooltip 显示相同的使用百分比，并在有 reset metadata 时显示重置时间
+- tooltip 显示相同的使用百分比，并在有重置时间信息时显示重置时间
 - 如果 Codex 本地数据提供 remaining percentage，插件会在显示前转换为 used percentage
 
 <p align="center">
@@ -78,7 +78,7 @@ powershell -ExecutionPolicy Bypass -File .\plugins\ClaudeUsagePlugin\claude-web-
 
 ## 数据来源
 
-- Claude 从 `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-usage.json` 读取 fresh helper snapshot。
+- Claude 从 `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-usage.json` 读取最新的 helper snapshot。
 - Claude helper 登录会把 cookie 保存在专用本地浏览器 profile 中。详情请参考 [PRIVACY.md](PRIVACY.md)。
 - Codex 从 `%USERPROFILE%\.codex\sessions\**\*.jsonl` 读取本地状态。
 - Codex 只支持 session JSONL 文件，不再使用 `logs_2.sqlite` fallback。
