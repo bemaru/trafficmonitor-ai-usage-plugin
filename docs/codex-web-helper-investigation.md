@@ -141,11 +141,14 @@ payload is stable enough to automate.
 ## Implementation Gate
 
 Do not replace the current session JSONL source until the Codex web payload is
-confirmed stable enough for a helper. The likely order is:
+confirmed stable enough for a helper. The remaining order is:
 
-1. Add multi-home JSONL support for Windows/WSL setups.
-2. Build a Codex web helper proof of concept on this branch.
-3. Decide whether the helper should be an optional fallback source.
+1. Run the manual DevTools verification from the dedicated helper profile.
+2. Record only sanitized endpoint names, response field names, payload shape,
+   workspace or organization selection behavior, and error-state behavior.
+3. Decide whether the helper should become an optional fallback source.
+4. If the web payload is not stable enough, keep session JSONL as the only
+   source and revisit multi-home JSONL support for Windows/WSL setups.
 
 Until the web payload is confirmed, this branch should not ship a user-facing
 Codex helper in a release package.

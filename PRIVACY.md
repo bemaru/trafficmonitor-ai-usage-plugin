@@ -45,8 +45,9 @@ unless they have been sanitized.
 
 ## Codex Web Helper PoC
 
-The Codex web helper is an investigation-only proof of concept on the
-`feature/7-codex-web-helper-poc` branch. It is not a Codex usage source yet.
+The Codex web helper is an investigation-only proof of concept unless it is
+explicitly promoted in a future release. It is not a Codex usage source yet and
+is not included in release packages.
 
 - `codex-web-helper.ps1 login` opens Edge or Chrome with a dedicated local
   browser profile at
