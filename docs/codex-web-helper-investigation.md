@@ -119,6 +119,25 @@ This PoC script is intentionally not copied into release build output yet. It
 should stay outside release packages until the web payload is manually verified
 and the helper is accepted as a supported source or fallback.
 
+## Manual Verification Checklist
+
+After running `login`, verify the web payload manually in the helper browser
+profile:
+
+1. Sign in to ChatGPT/OpenAI in the helper browser window.
+2. Confirm that `https://chatgpt.com/codex` loads a Codex page instead of a
+   login page, Cloudflare challenge, or generic ChatGPT page.
+3. Open DevTools Network tab and refresh the Codex page.
+4. Filter for JSON or fetch/XHR requests that include usage, quota, limit,
+   rate-limit, allowance, plan, workspace, organization, or account data.
+5. Confirm whether any response contains 5-hour and weekly usage percentages
+   plus reset timestamps.
+6. Do not copy cookies, authorization headers, session tokens, prompts, or
+   private repository data into issues, PRs, logs, or screenshots.
+
+Record only sanitized endpoint names, response field names, and whether the
+payload is stable enough to automate.
+
 ## Implementation Gate
 
 Do not replace the current session JSONL source until the Codex web payload is
