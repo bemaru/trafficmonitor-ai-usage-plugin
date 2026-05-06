@@ -56,6 +56,38 @@ The helper may:
 - How is workspace or organization selection represented?
 - What failure states map cleanly to user-facing status text?
 
+## Initial Findings
+
+Checked on 2026-05-06.
+
+- OpenAI Help links "Codex web" to `chatgpt.com` and notes that it requires
+  connecting ChatGPT to GitHub:
+  <https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan>
+- The same Help page says Codex usage from web or delegated cloud work is
+  available in the Compliance API, while local environment usage is not.
+- Unauthenticated `https://chatgpt.com/codex` requests return a Cloudflare
+  challenge response, so a plain Node `fetch` discovery flow is not enough.
+  A real Chromium helper profile would be needed for any browser-cookie PoC.
+- Local Codex session JSONL continues to expose `rate_limits` payloads for the
+  current local session. This remains the safer shipping source until the web
+  payload shape is verified from a dedicated helper profile.
+
+## Next Safe PoC Step
+
+The next implementation step should only add a login/open helper command for a
+dedicated Codex helper browser profile, similar to the Claude helper. It should
+not read cookies or make authenticated web requests yet.
+
+That first PoC can verify:
+
+- whether `https://chatgpt.com/codex` loads successfully in the dedicated
+  profile after user login
+- which origin and route the browser lands on
+- whether DevTools/manual inspection shows a JSON usage payload worth automating
+
+Only after that manual confirmation should the branch add cookie reading or
+authenticated requests.
+
 ## Implementation Gate
 
 Do not replace the current session JSONL source until the Codex web payload is
