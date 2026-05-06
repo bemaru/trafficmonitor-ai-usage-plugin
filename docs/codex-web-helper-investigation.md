@@ -115,6 +115,10 @@ The `login` command opens `https://chatgpt.com/codex` in the dedicated profile.
 It does not read cookies, inspect browser storage, call authenticated OpenAI
 endpoints, or write a usage snapshot.
 
+This PoC script is intentionally not copied into release build output yet. It
+should stay outside release packages until the web payload is manually verified
+and the helper is accepted as a supported source or fallback.
+
 ## Implementation Gate
 
 Do not replace the current session JSONL source until the Codex web payload is

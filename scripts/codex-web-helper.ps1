@@ -12,7 +12,7 @@ $baseDir = if ($env:LOCALAPPDATA) {
 }
 $profileDir = Join-Path $baseDir 'codex-browser-profile'
 $statusPath = Join-Path $baseDir 'codex-web-helper-status.json'
-$targetUrl = if ($env:CODEX_WEB_HELPER_URL) { $env:CODEX_WEB_HELPER_URL } else { 'https://chatgpt.com/codex' }
+$targetUrl = 'https://chatgpt.com/codex'
 
 function Get-RelativeAgeText {
     param([object]$Timestamp)
@@ -122,7 +122,7 @@ function Open-LoginBrowser {
     }
 
     $arguments = @(
-        "--user-data-dir=$profileDir",
+        "--user-data-dir=`"$profileDir`"",
         '--new-window',
         $targetUrl
     )
