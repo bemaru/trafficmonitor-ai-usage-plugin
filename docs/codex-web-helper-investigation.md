@@ -88,6 +88,33 @@ That first PoC can verify:
 Only after that manual confirmation should the branch add cookie reading or
 authenticated requests.
 
+## PoC Commands
+
+The current PoC adds only browser-profile management:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\codex-web-helper.ps1 status
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\codex-web-helper.ps1 login
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\codex-web-helper.ps1 reset
+```
+
+Files used by the PoC:
+
+- Dedicated browser profile:
+  `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\codex-browser-profile`
+- Helper status:
+  `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\codex-web-helper-status.json`
+
+The `login` command opens `https://chatgpt.com/codex` in the dedicated profile.
+It does not read cookies, inspect browser storage, call authenticated OpenAI
+endpoints, or write a usage snapshot.
+
 ## Implementation Gate
 
 Do not replace the current session JSONL source until the Codex web payload is

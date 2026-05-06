@@ -513,13 +513,18 @@
     <ClaudeHelperAsset Include="$(RepoRoot)helper\claude-web-helper\package-lock.json">
       <Destination>$(OutDir)ClaudeUsagePlugin\helper\claude-web-helper\package-lock.json</Destination>
     </ClaudeHelperAsset>
+    <CodexHelperAsset Include="$(RepoRoot)scripts\codex-web-helper.ps1">
+      <Destination>$(OutDir)ClaudeUsagePlugin\codex-web-helper.ps1</Destination>
+    </CodexHelperAsset>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <Target Name="CopyClaudeHelperAssets" AfterTargets="Build">
     <Delete Files="$(OutDir)claude-web-helper.ps1" />
+    <Delete Files="$(OutDir)codex-web-helper.ps1" />
     <RemoveDir Directories="$(OutDir)helper" />
     <MakeDir Directories="$(OutDir)ClaudeUsagePlugin\helper\claude-web-helper" />
     <Copy SourceFiles="@(ClaudeHelperAsset)" DestinationFiles="@(ClaudeHelperAsset->'%(Destination)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(CodexHelperAsset)" DestinationFiles="@(CodexHelperAsset->'%(Destination)')" SkipUnchangedFiles="true" />
   </Target>
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

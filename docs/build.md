@@ -28,9 +28,11 @@ MSBuild.exe .\ClaudeUsagePlugin.sln /t:ClaudeUsagePlugin /p:Configuration=Releas
 - `build\x64\Release\plugins\ClaudeUsagePlugin.dll`
 - `build\x64\Release\plugins\ClaudeUsagePlugin\claude-web-helper.ps1`
 - `build\x64\Release\plugins\ClaudeUsagePlugin\helper\claude-web-helper\...`
+- `build\x64\Release\plugins\ClaudeUsagePlugin\codex-web-helper.ps1`
 - `build\Release\plugins\ClaudeUsagePlugin.dll`
 - `build\Release\plugins\ClaudeUsagePlugin\claude-web-helper.ps1`
 - `build\Release\plugins\ClaudeUsagePlugin\helper\claude-web-helper\...`
+- `build\Release\plugins\ClaudeUsagePlugin\codex-web-helper.ps1`
 
 The project file also contains `ARM64EC` configurations, but the published release assets are currently only `x64` and `x86`.
 
