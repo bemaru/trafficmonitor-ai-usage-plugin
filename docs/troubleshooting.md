@@ -61,6 +61,16 @@ TrafficMonitor now standardizes Codex on used percentage in both the widget and 
 If the Codex usage page is showing remaining percentage for the same window, the two numbers should add up to about 100%.
 If the numbers are not simple inverses, verify that `%USERPROFILE%\.codex\sessions\**\*.jsonl` is being updated and that `CODEX_HOME` points at the same Codex profile the dashboard is using.
 
+### A weekly Codex limit appears under `X5h`
+
+Current Codex payloads can place a seven-day limit in `primary` instead of `secondary`.
+Plugin `v0.3.12` and newer classify limits by their reported duration:
+
+- `300` minutes is displayed as `X5h`
+- `10080` minutes is displayed as `X7d`
+
+If a current payload is still shown under the wrong label, verify that TrafficMonitor loaded `v0.3.12` or newer and restart TrafficMonitor after replacing the DLL.
+
 ### Codex values jump between different weekly reset times
 
 `CODEX_HOME` controls which Codex profile directory TrafficMonitor reads, but multiple session JSONL files inside the same profile can still be active at the same time.

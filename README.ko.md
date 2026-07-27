@@ -34,8 +34,8 @@ Windows에서 이런 AI 사용량 한도를 편하게 볼 수 있는 적절한 �
    - 원하는 위치에 압축을 풀고 `TrafficMonitor.exe`를 실행합니다.
    - 온도 모니터링이 필요 없다면 보통 Lite 패키지로 충분합니다.
 2. [최신 릴리스](https://github.com/bemaru/trafficmonitor-ai-usage-plugin/releases/latest)에서 설치한 TrafficMonitor와 같은 아키텍처의 플러그인 zip을 다운로드합니다.
-   - `x64` TrafficMonitor에는 `TrafficMonitorAIUsageLimits_v0.3.11_x64.zip`
-   - `x86` TrafficMonitor에는 `TrafficMonitorAIUsageLimits_v0.3.11_x86.zip`
+   - `x64` TrafficMonitor에는 `TrafficMonitorAIUsageLimits_v0.3.12_x64.zip`
+   - `x86` TrafficMonitor에는 `TrafficMonitorAIUsageLimits_v0.3.12_x86.zip`
 3. zip 파일을 `TrafficMonitor.exe`가 있는 TrafficMonitor 폴더에 압축 해제합니다.
    압축 해제 후 구조는 다음과 같아야 합니다.
 
@@ -87,6 +87,7 @@ helper 파일이 `plugins\ClaudeUsagePlugin` 아래에 있으면, 최초 로그�
 - Claude helper 로그인은 전용 로컬 브라우저 프로필에 쿠키를 저장합니다. 자세한 내용은 [PRIVACY.md](PRIVACY.md)를 참고하세요.
 - Codex는 `%USERPROFILE%\.codex\sessions\**\*.jsonl`의 로컬 상태를 읽습니다.
 - Codex session JSONL 파일만 지원합니다. `logs_2.sqlite` fallback은 없습니다.
+- Codex 한도는 `window_minutes`로 구분하므로, 7일 한도가 `primary`로 전달되어도 `X7d`에 표시됩니다.
 - rate-limit payload가 포함된 session JSONL 파일이 없으면 Codex는 unavailable로 표시됩니다.
 - Codex 로컬 payload는 `used_percent` 또는 `remaining_percent`를 제공할 수 있으며, 남은 값은 사용률로 변환됩니다.
 - `CODEX_HOME`은 Windows에서 읽을 수 있는 경로일 때 기본 Codex 경로를 대체합니다.

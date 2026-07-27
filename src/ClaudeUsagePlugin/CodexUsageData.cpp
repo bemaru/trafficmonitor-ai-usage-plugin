@@ -18,6 +18,8 @@ constexpr unsigned long long REFRESH_INTERVAL_MS = 60ULL * 1000ULL;
 constexpr unsigned long long RETRY_INTERVAL_MS = 5ULL * 1000ULL;
 constexpr unsigned long long MAX_TEXT_FILE_SIZE = 32ULL * 1024ULL * 1024ULL;
 constexpr long long RECENT_EVENT_WINDOW_SECONDS = 15LL * 60LL;
+constexpr long long FIVE_HOUR_WINDOW_MINUTES = 5LL * 60LL;
+constexpr long long SEVEN_DAY_WINDOW_MINUTES = 7LL * 24LL * 60LL;
 constexpr wchar_t CODEX_SESSION_DIR_NAME[] = L"sessions";
 
 struct SessionFileCandidate
@@ -524,6 +526,13 @@ bool LoadMetricFromRateLimitsSection(const std::string& section_json, const char
 
     metric.available = true;
 
+    long long window_minutes{};
+    if (TryGetJsonInt64(metric_json, "window_minutes", window_minutes) && window_minutes > 0)
+    {
+        metric.has_window_minutes = true;
+        metric.window_minutes = window_minutes;
+    }
+
     long long reset_at{};
     if (TryGetJsonInt64(metric_json, "reset_at", reset_at) || TryGetJsonInt64(metric_json, "resets_at", reset_at))
     {
@@ -539,18 +548,46 @@ bool LoadMetricFromRateLimitsSection(const std::string& section_json, const char
     return true;
 }
 
+bool AssignMetricToWindow(
+    const CCodexUsageData::Metric& metric,
+    CodexUsageWindow legacy_window,
+    CCodexUsageData::Snapshot& snapshot)
+{
+    CodexUsageWindow window = legacy_window;
+    if (metric.has_window_minutes)
+    {
+        if (metric.window_minutes == FIVE_HOUR_WINDOW_MINUTES)
+            window = CodexUsageWindow::Rolling5Hours;
+        else if (metric.window_minutes == SEVEN_DAY_WINDOW_MINUTES)
+            window = CodexUsageWindow::Rolling7Days;
+        else
+            return false;
+    }
+
+    if (window == CodexUsageWindow::Rolling5Hours)
+        snapshot.rolling_5h = metric;
+    else
+        snapshot.rolling_7d = metric;
+    return true;
+}
+
 bool LoadFromRateLimitsJson(const std::string& json, CCodexUsageData::Snapshot& snapshot)
 {
     std::string rate_limits_json;
     if (!TryGetJsonObject(json, "rate_limits", rate_limits_json))
         return false;
 
-    const bool has_5h = LoadMetricFromRateLimitsSection(rate_limits_json, "primary", snapshot.rolling_5h);
-    const bool has_7d = LoadMetricFromRateLimitsSection(rate_limits_json, "secondary", snapshot.rolling_7d);
-    if (!has_5h && !has_7d)
-        return false;
+    CCodexUsageData::Metric primary;
+    CCodexUsageData::Metric secondary;
+    const bool has_primary = LoadMetricFromRateLimitsSection(rate_limits_json, "primary", primary);
+    const bool has_secondary = LoadMetricFromRateLimitsSection(rate_limits_json, "secondary", secondary);
 
-    return true;
+    bool assigned = false;
+    if (has_primary)
+        assigned = AssignMetricToWindow(primary, CodexUsageWindow::Rolling5Hours, snapshot) || assigned;
+    if (has_secondary)
+        assigned = AssignMetricToWindow(secondary, CodexUsageWindow::Rolling7Days, snapshot) || assigned;
+    return assigned;
 }
 
 std::wstring GetCodexSessionsDir()
@@ -598,6 +635,23 @@ void CollectJsonlFilesRecursive(const std::wstring& root_dir, std::vector<Sessio
 bool CompareFileTimeNewer(const FILETIME& left, const FILETIME& right)
 {
     return CompareFileTime(&left, &right) > 0;
+}
+
+bool IsFileTimeWithinSeconds(const FILETIME& newer, const FILETIME& older, long long seconds)
+{
+    ULARGE_INTEGER newer_value{};
+    newer_value.LowPart = newer.dwLowDateTime;
+    newer_value.HighPart = newer.dwHighDateTime;
+
+    ULARGE_INTEGER older_value{};
+    older_value.LowPart = older.dwLowDateTime;
+    older_value.HighPart = older.dwHighDateTime;
+
+    if (older_value.QuadPart >= newer_value.QuadPart)
+        return true;
+
+    const unsigned long long difference = newer_value.QuadPart - older_value.QuadPart;
+    return difference <= static_cast<unsigned long long>(seconds) * 10000000ULL;
 }
 
 bool IsCodexRateLimitEventLine(const std::string& line)
@@ -866,14 +920,32 @@ bool CCodexUsageData::LoadFromSessionJsonlStore(const std::wstring& store_dir, S
         return false;
     }
 
+    std::sort(candidates.begin(), candidates.end(), [](const SessionFileCandidate& left, const SessionFileCandidate& right) {
+        return CompareFileTimeNewer(left.last_write_time, right.last_write_time);
+    });
+
     std::vector<SessionSnapshotCandidate> parsed_candidates;
     bool has_newest_event_unix_seconds = false;
     long long newest_event_unix_seconds = LLONG_MIN;
+    bool has_active_file_window = false;
+    FILETIME active_file_window{};
     for (const SessionFileCandidate& candidate : candidates)
     {
+        if (has_active_file_window &&
+            !IsFileTimeWithinSeconds(active_file_window, candidate.last_write_time, RECENT_EVENT_WINDOW_SECONDS))
+        {
+            break;
+        }
+
         SessionSnapshotCandidate parsed;
         if (!LoadSessionJsonlFile(candidate.path, candidate.last_write_time, parsed))
             continue;
+
+        if (!has_active_file_window)
+        {
+            active_file_window = candidate.last_write_time;
+            has_active_file_window = true;
+        }
 
         if (parsed.has_event_unix_seconds)
         {

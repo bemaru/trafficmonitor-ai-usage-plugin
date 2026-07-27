@@ -34,8 +34,8 @@ The plugin puts Claude and Codex usage limits in that fixed taskbar location, in
    - Extract it anywhere you want, then run `TrafficMonitor.exe`
    - If you do not need temperature monitoring, the Lite package is usually enough
 2. Download the plugin zip that matches the installed TrafficMonitor build from the [latest release](https://github.com/bemaru/trafficmonitor-ai-usage-plugin/releases/latest):
-   - `TrafficMonitorAIUsageLimits_v0.3.11_x64.zip` for `x64` TrafficMonitor
-   - `TrafficMonitorAIUsageLimits_v0.3.11_x86.zip` for `x86` TrafficMonitor
+   - `TrafficMonitorAIUsageLimits_v0.3.12_x64.zip` for `x64` TrafficMonitor
+   - `TrafficMonitorAIUsageLimits_v0.3.12_x86.zip` for `x86` TrafficMonitor
 3. Extract the zip into the TrafficMonitor folder, the folder that contains `TrafficMonitor.exe`.
    After extraction, the layout should look like this:
 
@@ -87,6 +87,7 @@ For the full screenshot walkthrough, see [docs/install.md](docs/install.md).
 - Claude helper login stores cookies in a dedicated local browser profile; see [PRIVACY.md](PRIVACY.md)
 - Codex reads local state from `%USERPROFILE%\.codex\sessions\**\*.jsonl`
 - Codex session JSONL files are the only supported local source; there is no `logs_2.sqlite` fallback
+- Codex limits are assigned by `window_minutes`, so a seven-day limit delivered as `primary` is still shown as `X7d`
 - If no session JSONL file contains rate-limit payloads yet, Codex shows unavailable
 - Codex local payloads can expose either `used_percent` or `remaining_percent`; remaining values are converted to used percentage before display
 - `CODEX_HOME` overrides the default Codex path when it resolves to a Windows-readable location

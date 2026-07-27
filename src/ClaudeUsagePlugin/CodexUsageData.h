@@ -16,6 +16,8 @@ public:
     {
         bool available{};
         double percentage{};
+        bool has_window_minutes{};
+        long long window_minutes{};
         bool has_reset_time{};
         long long reset_at_unix_seconds{};
         std::wstring reset_time_text;

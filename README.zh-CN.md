@@ -34,8 +34,8 @@
    - 解压到任意目录，然后运行 `TrafficMonitor.exe`。
    - 如果不需要温度监控，通常 Lite 包就够用。
 2. 从 [latest release](https://github.com/bemaru/trafficmonitor-ai-usage-plugin/releases/latest) 下载与已安装 TrafficMonitor 架构匹配的插件 zip。
-   - `x64` TrafficMonitor 使用 `TrafficMonitorAIUsageLimits_v0.3.11_x64.zip`
-   - `x86` TrafficMonitor 使用 `TrafficMonitorAIUsageLimits_v0.3.11_x86.zip`
+   - `x64` TrafficMonitor 使用 `TrafficMonitorAIUsageLimits_v0.3.12_x64.zip`
+   - `x86` TrafficMonitor 使用 `TrafficMonitorAIUsageLimits_v0.3.12_x86.zip`
 3. 将 zip 解压到包含 `TrafficMonitor.exe` 的 TrafficMonitor 文件夹中。
    解压后的结构应如下所示。
 
@@ -87,6 +87,7 @@ powershell -ExecutionPolicy Bypass -File .\plugins\ClaudeUsagePlugin\claude-web-
 - Claude helper 登录会把 cookie 保存在专用本地浏览器 profile 中。详情请参考 [PRIVACY.md](PRIVACY.md)。
 - Codex 从 `%USERPROFILE%\.codex\sessions\**\*.jsonl` 读取本地状态。
 - Codex 只支持 session JSONL 文件，不再使用 `logs_2.sqlite` fallback。
+- Codex 按 `window_minutes` 区分限额，因此即使七天限额位于 `primary`，也会显示为 `X7d`。
 - 如果没有 session JSONL 文件包含 rate-limit payload，Codex 会显示 unavailable。
 - Codex 本地 payload 可能提供 `used_percent` 或 `remaining_percent`，remaining 值会被转换为 used percentage。
 - 当 `CODEX_HOME` 指向 Windows 可读取的位置时，会覆盖默认 Codex 路径。

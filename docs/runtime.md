@@ -15,6 +15,8 @@ Codex usage limits:
 - If no session JSONL file contains rate-limit payloads yet, Codex shows unavailable
 - Displays the used percentage for Codex in both the widget and tooltip
 - Converts local `remaining_percent` payloads to used percentage before display when needed
+- Classifies a `300` minute window as `X5h` and a `10080` minute window as `X7d`, regardless of whether the payload places it in `primary` or `secondary`
+- Uses the legacy `primary` / `secondary` mapping only when `window_minutes` is absent
 - Respects `CODEX_HOME` when it resolves to a Windows-readable path, including WSL-style `/mnt/c/...` paths
 
 ## `CODEX_HOME` Notes
