@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.3.12 - 2026-07-27
+
+### Added
+- Added DLL-level regression tests for current, legacy, reordered, and unknown Codex rate-limit windows on both x64 and x86 builds.
+
+### Changed
+- Codex session refresh now parses only the newest active file window instead of rereading every eligible historical JSONL file on each refresh.
+- Compact taskbar items now use narrower bars and spacing, and hide the bar before overflowing a narrow host rectangle.
+
+### Fixed
+- Codex rate-limit metrics are now assigned by `window_minutes`, so a seven-day limit delivered in `primary` is shown under `X7d` instead of `X5h`.
+- Payloads without `window_minutes` retain the legacy `primary` / `secondary` fallback mapping.
+- Custom taskbar drawing is clipped to the rectangle supplied by TrafficMonitor, preventing overlap with neighboring taskbar content.
+
 ## 0.3.11 - 2026-04-28
 
 ### Added

@@ -4,6 +4,8 @@ VisualStudioVersion = 17.10.35201.131
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ClaudeUsagePlugin", "src\ClaudeUsagePlugin\ClaudeUsagePlugin.vcxproj", "{5465584E-8BA0-4E3E-926F-C23542F8CAA7}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CodexUsagePluginTests", "tests\CodexUsagePluginTests.vcxproj", "{A2E65339-7864-4AA8-A166-28E1CC4B7BFA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -20,6 +22,14 @@ Global
 		{5465584E-8BA0-4E3E-926F-C23542F8CAA7}.Release|Win32.Build.0 = Release|Win32
 		{5465584E-8BA0-4E3E-926F-C23542F8CAA7}.Release|x64.ActiveCfg = Release|x64
 		{5465584E-8BA0-4E3E-926F-C23542F8CAA7}.Release|x64.Build.0 = Release|x64
+		{A2E65339-7864-4AA8-A166-28E1CC4B7BFA}.Debug|Win32.ActiveCfg = Debug|Win32
+		{A2E65339-7864-4AA8-A166-28E1CC4B7BFA}.Debug|Win32.Build.0 = Debug|Win32
+		{A2E65339-7864-4AA8-A166-28E1CC4B7BFA}.Debug|x64.ActiveCfg = Debug|x64
+		{A2E65339-7864-4AA8-A166-28E1CC4B7BFA}.Debug|x64.Build.0 = Debug|x64
+		{A2E65339-7864-4AA8-A166-28E1CC4B7BFA}.Release|Win32.ActiveCfg = Release|Win32
+		{A2E65339-7864-4AA8-A166-28E1CC4B7BFA}.Release|Win32.Build.0 = Release|Win32
+		{A2E65339-7864-4AA8-A166-28E1CC4B7BFA}.Release|x64.ActiveCfg = Release|x64
+		{A2E65339-7864-4AA8-A166-28E1CC4B7BFA}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

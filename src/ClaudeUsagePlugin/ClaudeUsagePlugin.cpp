@@ -92,15 +92,18 @@ void DrawUsageItemBar(
         return;
 
     const int padding = 4;
-    const int gap = 6;
+    const int gap = 4;
     const int accent_width = 3;
-    const int bar_min_width = 36;
+    const int bar_min_width = 20;
     const int bar_height = (h >= 16 ? 6 : 4);
 
     const int label_width = MeasureTextWidth(pDC, label_text);
     const int value_width = max(MeasureTextWidth(pDC, value_text), MeasureTextWidth(pDC, value_sample_text));
 
     CRect rect(x, y, x + w, y + h);
+    const int saved_dc = pDC->SaveDC();
+    pDC->IntersectClipRect(rect);
+
     CRect accent_rect(rect.left + padding, rect.top + 2, rect.left + padding + accent_width, rect.bottom - 2);
     pDC->FillSolidRect(accent_rect, colors.accent);
 
@@ -109,38 +112,39 @@ void DrawUsageItemBar(
     int value_left = content_right - value_width;
     int bar_left = content_left + label_width + gap;
     int bar_right = value_left - gap;
+    bool draw_bar = bar_right - bar_left >= bar_min_width;
 
-    if (bar_right - bar_left < bar_min_width)
+    if (!draw_bar)
     {
-        const int shortage = bar_min_width - (bar_right - bar_left);
-        const int trim_label = shortage / 2;
-        content_left += trim_label;
-        value_left += shortage - trim_label;
-        bar_left = content_left + label_width + gap;
-        bar_right = value_left - gap;
+        const int available_width = max(0, content_right - content_left);
+        const int compact_value_width = min(value_width, available_width);
+        value_left = max(content_left, content_right - compact_value_width);
+        bar_left = value_left;
+        bar_right = value_left;
     }
-
-    if (bar_right <= bar_left)
-        bar_right = bar_left + bar_min_width;
 
     const int center_y = rect.top + (h / 2);
     const int bar_top = center_y - (bar_height / 2);
     const int bar_bottom = bar_top + bar_height;
-    CRect bar_rect(bar_left, bar_top, bar_right, bar_bottom);
-    CRect bar_fill_rect = bar_rect;
+    if (draw_bar)
+    {
+        CRect bar_rect(bar_left, bar_top, bar_right, bar_bottom);
+        CRect bar_fill_rect = bar_rect;
 
-    bar_fill_rect.right = bar_fill_rect.left + static_cast<int>((bar_fill_rect.Width() * ratio) + 0.5f);
-    pDC->FillSolidRect(bar_rect, colors.track);
-    if (bar_fill_rect.Width() > 0)
-        pDC->FillSolidRect(bar_fill_rect, colors.accent);
-    CBrush border_brush;
-    border_brush.CreateSolidBrush(colors.border);
-    pDC->FrameRect(&bar_rect, &border_brush);
+        bar_fill_rect.right = bar_fill_rect.left + static_cast<int>((bar_fill_rect.Width() * ratio) + 0.5f);
+        pDC->FillSolidRect(bar_rect, colors.track);
+        if (bar_fill_rect.Width() > 0)
+            pDC->FillSolidRect(bar_fill_rect, colors.accent);
+        CBrush border_brush;
+        border_brush.CreateSolidBrush(colors.border);
+        pDC->FrameRect(&bar_rect, &border_brush);
+    }
 
     const int old_bk_mode = pDC->SetBkMode(TRANSPARENT);
     const COLORREF old_text_color = pDC->GetTextColor();
 
-    CRect label_rect(content_left, rect.top, bar_left - gap, rect.bottom);
+    const int label_right = (draw_bar ? bar_left - gap : max(content_left, value_left - gap));
+    CRect label_rect(content_left, rect.top, label_right, rect.bottom);
     CRect value_rect(value_left, rect.top, rect.right - padding, rect.bottom);
 
     pDC->SetTextColor(colors.text);
@@ -151,6 +155,8 @@ void DrawUsageItemBar(
 
     pDC->SetTextColor(old_text_color);
     pDC->SetBkMode(old_bk_mode);
+    if (saved_dc != 0)
+        pDC->RestoreDC(saved_dc);
 }
 }
 
@@ -202,11 +208,12 @@ int CClaudeUsageItem::GetItemWidthEx(void* hDC) const
         return GetItemWidth();
 
     const int padding = 4;
-    const int gap = 6;
-    const int bar_min_width = 36;
+    const int gap = 4;
+    const int accent_width = 3;
+    const int bar_min_width = 20;
     const int label_width = MeasureTextWidth(pDC, GetItemLableText());
     const int value_width = MeasureTextWidth(pDC, GetItemValueSampleText());
-    return padding * 2 + 4 + label_width + gap + bar_min_width + gap + value_width;
+    return padding * 2 + accent_width + gap + label_width + gap + bar_min_width + gap + value_width;
 }
 
 void CClaudeUsageItem::DrawItem(void* hDC, int x, int y, int w, int h, bool dark_mode)
@@ -269,11 +276,12 @@ int CCodexUsageItem::GetItemWidthEx(void* hDC) const
         return GetItemWidth();
 
     const int padding = 4;
-    const int gap = 6;
-    const int bar_min_width = 36;
+    const int gap = 4;
+    const int accent_width = 3;
+    const int bar_min_width = 20;
     const int label_width = MeasureTextWidth(pDC, GetItemLableText());
     const int value_width = MeasureTextWidth(pDC, GetItemValueSampleText());
-    return padding * 2 + 4 + label_width + gap + bar_min_width + gap + value_width;
+    return padding * 2 + accent_width + gap + label_width + gap + bar_min_width + gap + value_width;
 }
 
 void CCodexUsageItem::DrawItem(void* hDC, int x, int y, int w, int h, bool dark_mode)
@@ -341,7 +349,7 @@ const wchar_t* CClaudeUsagePlugin::GetInfo(PluginInfoIndex index)
         value = L"Copyright (C) 2026";
         break;
     case TMI_VERSION:
-        value = L"0.3.11";
+        value = L"0.3.12";
         break;
     case TMI_URL:
         value = L"https://github.com/bemaru/trafficmonitor-ai-usage-plugin";
