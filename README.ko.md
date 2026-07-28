@@ -34,8 +34,8 @@ Windows에서 이런 AI 사용량 한도를 편하게 볼 수 있는 적절한 �
    - 원하는 위치에 압축을 풀고 `TrafficMonitor.exe`를 실행합니다.
    - 온도 모니터링이 필요 없다면 보통 Lite 패키지로 충분합니다.
 2. [최신 릴리스](https://github.com/bemaru/trafficmonitor-ai-usage-plugin/releases/latest)에서 설치한 TrafficMonitor와 같은 아키텍처의 플러그인 zip을 다운로드합니다.
-   - `x64` TrafficMonitor에는 `TrafficMonitorAIUsageLimits_v0.3.12_x64.zip`
-   - `x86` TrafficMonitor에는 `TrafficMonitorAIUsageLimits_v0.3.12_x86.zip`
+   - `x64` TrafficMonitor에는 `TrafficMonitorAIUsageLimits_v0.3.13_x64.zip`
+   - `x86` TrafficMonitor에는 `TrafficMonitorAIUsageLimits_v0.3.13_x86.zip`
 3. zip 파일을 `TrafficMonitor.exe`가 있는 TrafficMonitor 폴더에 압축 해제합니다.
    압축 해제 후 구조는 다음과 같아야 합니다.
 

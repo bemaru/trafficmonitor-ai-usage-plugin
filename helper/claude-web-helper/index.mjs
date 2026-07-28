@@ -78,16 +78,57 @@ async function writeStatus(state, details = {}) {
   });
 }
 
-function isProcessRunning(pid) {
+function matchesHelperWatchProcess(processInfo, watchLock) {
+  if (!processInfo || !watchLock) {
+    return false;
+  }
+  if (String(watchLock.mode || '').toLowerCase() !== 'watch') {
+    return false;
+  }
+
+  const name = String(processInfo.name || '').toLowerCase();
+  const commandLine = String(processInfo.command_line || '');
+  if (name !== 'node.exe' || !/index\.mjs/i.test(commandLine) || !/(^|\s)watch(\s|$)/i.test(commandLine)) {
+    return false;
+  }
+
+  const processStartedAt = Date.parse(String(processInfo.created_at || ''));
+  const lockStartedAt = Date.parse(String(watchLock.started_at || ''));
+  if (!Number.isFinite(processStartedAt) || !Number.isFinite(lockStartedAt)) {
+    return false;
+  }
+
+  return Math.abs(lockStartedAt - processStartedAt) <= 30_000;
+}
+
+function getWindowsProcessInfo(pid) {
+  const script = [
+    `$process = Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}" -ErrorAction SilentlyContinue`,
+    'if ($null -eq $process) { exit 3 }',
+    '[pscustomobject]@{',
+    '  name = [string]$process.Name',
+    '  command_line = [string]$process.CommandLine',
+    "  created_at = ([DateTimeOffset]$process.CreationDate).ToUniversalTime().ToString('o')",
+    '} | ConvertTo-Json -Compress',
+  ].join('\n');
+
+  return JSON.parse(runPowerShell(script));
+}
+
+function isHelperWatchRunning(watchLock) {
+  const pid = Number(watchLock && watchLock.pid);
   if (!Number.isInteger(pid) || pid <= 0) {
     return false;
   }
 
+  if (process.platform !== 'win32') {
+    return false;
+  }
+
   try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return error && error.code === 'EPERM';
+    return matchesHelperWatchProcess(getWindowsProcessInfo(pid), watchLock);
+  } catch {
+    return false;
   }
 }
 
@@ -148,7 +189,7 @@ async function acquireWatchLock() {
 
       const existingLock = await tryReadJsonFile(WATCH_LOCK_PATH);
       const existingPid = Number(existingLock && existingLock.pid);
-      if (isProcessRunning(existingPid) && existingPid !== process.pid) {
+      if (isHelperWatchRunning(existingLock) && existingPid !== process.pid) {
         console.log(`Claude helper watch already running (pid ${existingPid}).`);
         return false;
       }
