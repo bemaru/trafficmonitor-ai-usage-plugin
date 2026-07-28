@@ -63,14 +63,38 @@ function Format-FileStatus {
     return "$Path [$([int64]$item.Length) bytes, $($item.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')), $(Get-RelativeAgeText $item.LastWriteTime)]"
 }
 
-function Test-ProcessRunning {
-    param([int]$ProcessId)
+function Test-HelperWatchProcess {
+    param(
+        [int]$ProcessId,
+        [object]$WatchLock
+    )
 
-    if ($ProcessId -le 0) {
+    if ($ProcessId -le 0 -or -not $WatchLock -or [string]$WatchLock.mode -ne 'watch') {
         return $false
     }
 
-    return $null -ne (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue)
+    try {
+        $process = Get-CimInstance Win32_Process -Filter "ProcessId = $ProcessId" -ErrorAction Stop
+        if (-not $process -or $process.Name -ne 'node.exe') {
+            return $false
+        }
+
+        $commandLine = [string]$process.CommandLine
+        if ($commandLine -notmatch '(?i)index\.mjs' -or $commandLine -notmatch '(?i)(^|\s)watch(\s|$)') {
+            return $false
+        }
+
+        $lockStartedAt = [DateTimeOffset]::Parse(
+            [string]$WatchLock.started_at,
+            [System.Globalization.CultureInfo]::InvariantCulture,
+            [System.Globalization.DateTimeStyles]::AssumeUniversal
+        ).ToUniversalTime()
+        $processStartedAt = ([DateTimeOffset]$process.CreationDate).ToUniversalTime()
+        $startDifference = [Math]::Abs(($lockStartedAt - $processStartedAt).TotalSeconds)
+        return $startDifference -le 30
+    } catch {
+        return $false
+    }
 }
 
 function Get-WatchLockData {
@@ -88,12 +112,15 @@ function Get-WatchLockData {
 function Remove-StaleWatchLock {
     $watchLock = Get-WatchLockData
     if (-not $watchLock) {
+        if (Test-Path $watchLockPath) {
+            Remove-Item $watchLockPath -Force -ErrorAction SilentlyContinue
+        }
         return
     }
 
     $watchPid = 0
     [void][int]::TryParse([string]$watchLock.pid, [ref]$watchPid)
-    if (Test-ProcessRunning $watchPid) {
+    if (Test-HelperWatchProcess -ProcessId $watchPid -WatchLock $watchLock) {
         return
     }
 
@@ -121,7 +148,7 @@ function Show-Status {
     if ($watchLock) {
         $watchPid = 0
         [void][int]::TryParse([string]$watchLock.pid, [ref]$watchPid)
-        $running = Test-ProcessRunning $watchPid
+        $running = Test-HelperWatchProcess -ProcessId $watchPid -WatchLock $watchLock
         Write-Host ("Watch: pid={0}, mode={1}, refresh_ms={2}, started_at={3}, running={4}" -f $watchPid, $watchLock.mode, $watchLock.refresh_ms, $watchLock.started_at, $running)
         if (-not $running) {
             Write-Host 'Watch lock is stale.'
@@ -163,10 +190,10 @@ function Stop-HelperProcesses {
     if ($watchLock) {
         $watchPid = 0
         [void][int]::TryParse([string]$watchLock.pid, [ref]$watchPid)
-        if (Test-ProcessRunning $watchPid) {
+        if (Test-HelperWatchProcess -ProcessId $watchPid -WatchLock $watchLock) {
             Stop-Process -Id $watchPid -Force
             Start-Sleep -Milliseconds 500
-            if (-not (Test-ProcessRunning $watchPid)) {
+            if (-not (Test-HelperWatchProcess -ProcessId $watchPid -WatchLock $watchLock)) {
                 Remove-Item $watchLockPath -Force -ErrorAction SilentlyContinue
             }
             Write-Host "Stopped helper watch PID $watchPid"
@@ -175,12 +202,9 @@ function Stop-HelperProcesses {
             Remove-Item $watchLockPath -Force -ErrorAction SilentlyContinue
             Write-Host 'Removed stale helper watch lock.'
         }
-    }
-
-    $processes = Get-HelperNodeProcesses
-    foreach ($process in $processes) {
-        Stop-Process -Id $process.ProcessId -Force
-        Write-Host "Stopped helper PID $($process.ProcessId)"
+    } elseif (Test-Path $watchLockPath) {
+        Remove-Item $watchLockPath -Force -ErrorAction SilentlyContinue
+        Write-Host 'Removed unreadable helper watch lock.'
         $stopped = $true
     }
 
@@ -196,18 +220,16 @@ function Start-HiddenWatch {
     if ($watchLock) {
         $watchPid = 0
         [void][int]::TryParse([string]$watchLock.pid, [ref]$watchPid)
-        if (Test-ProcessRunning $watchPid) {
+        if (Test-HelperWatchProcess -ProcessId $watchPid -WatchLock $watchLock) {
             Write-Host "Helper watch already running (PID $watchPid)."
             return
         }
     }
 
     $nodePath = (Get-Command node -CommandType Application).Source
-    $arguments = @(
-        '--disable-warning=ExperimentalWarning',
-        'index.mjs',
-        'watch'
-    )
+    $helperScriptPath = Join-Path $helperDir 'index.mjs'
+    $escapedHelperScriptPath = $helperScriptPath.Replace('"', '\"')
+    $arguments = "--disable-warning=ExperimentalWarning `"$escapedHelperScriptPath`" watch"
     $child = Start-Process -FilePath $nodePath -WorkingDirectory $helperDir -ArgumentList $arguments -WindowStyle Hidden -PassThru
     Start-Sleep -Seconds 1
     Write-Host "Started helper watch in background (PID $($child.Id))."

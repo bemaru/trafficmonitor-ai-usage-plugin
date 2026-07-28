@@ -60,6 +60,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 start
 - Launches the background refresh loop as a hidden background process
 - This is the normal steady-state mode after the one-time login
 - If a watcher is already running, it prints the current watcher PID instead of starting a duplicate
+- A persisted watch lock is accepted only when its PID still belongs to a matching Node `index.mjs watch` process with the same start time
+- `stop` terminates only that validated watcher; a reused PID owned by another process is never terminated
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 status

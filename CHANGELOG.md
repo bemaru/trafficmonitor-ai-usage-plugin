@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.3.13 - 2026-07-28
+
+### Added
+- Added a helper watch-lock regression test that uses a valid-looking unrelated Node process to reproduce PID reuse safely.
+
+### Changed
+- The PowerShell wrapper now launches the helper with an absolute `index.mjs` path and limits `stop` to the watcher validated by the current lock.
+
+### Fixed
+- Helper watch locks now validate the process name, command line, and process start time instead of treating any live reused PID as the watcher.
+- Stale or unreadable watch locks are removed without terminating the unrelated process that currently owns the recorded PID.
+
 ## 0.3.12 - 2026-07-27
 
 ### Added
