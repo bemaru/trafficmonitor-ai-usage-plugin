@@ -517,6 +517,7 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <Target Name="CopyClaudeHelperAssets" AfterTargets="Build">
     <Delete Files="$(OutDir)claude-web-helper.ps1" />
+    <Delete Files="$(OutDir)ClaudeUsagePlugin\codex-web-helper.ps1" />
     <RemoveDir Directories="$(OutDir)helper" />
     <MakeDir Directories="$(OutDir)ClaudeUsagePlugin\helper\claude-web-helper" />
     <Copy SourceFiles="@(ClaudeHelperAsset)" DestinationFiles="@(ClaudeHelperAsset->'%(Destination)')" SkipUnchangedFiles="true" />
