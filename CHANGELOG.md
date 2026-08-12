@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Fixed
+- `start` now launches the watcher when more than one `node` executable is on `PATH`, instead of failing with a `Start-Process` argument type error.
+
 ## 0.3.13 - 2026-07-28
 
 ### Added
