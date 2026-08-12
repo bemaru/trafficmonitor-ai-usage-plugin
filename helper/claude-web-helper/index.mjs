@@ -253,6 +253,7 @@ function getLocalStatePayload() {
 function runPowerShell(script) {
   const encodedCommand = Buffer.from(script, 'utf16le').toString('base64');
   const candidates = ['pwsh', 'powershell.exe'];
+  const failures = [];
 
   for (const executable of candidates) {
     const result = spawnSync(executable, ['-NoProfile', '-EncodedCommand', encodedCommand], {
@@ -262,9 +263,17 @@ function runPowerShell(script) {
     if (!result.error && result.status === 0) {
       return result.stdout.trim();
     }
+
+    failures.push(
+      `${executable}: ${
+        result.error ? result.error.message : `exited ${result.status}: ${(result.stderr || '').trim()}`
+      }`,
+    );
   }
 
-  throw new Error('Failed to run PowerShell for Chromium DPAPI decryption');
+  throw new Error(
+    `Failed to run PowerShell for Chromium DPAPI decryption (${failures.join('; ')})`,
+  );
 }
 
 function getMasterKey() {
@@ -286,6 +295,8 @@ function getMasterKey() {
 
   const dpapiPayload = encryptedKey.subarray(5);
   const pwshScript =
+    `if (-not ('System.Security.Cryptography.ProtectedData' -as [type])) { ` +
+    `Add-Type -AssemblyName System.Security }; ` +
     `[Convert]::ToBase64String(` +
     `[System.Security.Cryptography.ProtectedData]::Unprotect(` +
     `[Convert]::FromBase64String('${dpapiPayload.toString('base64')}'), ` +

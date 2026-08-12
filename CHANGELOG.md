@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+- The Claude helper now loads the `System.Security` assembly before calling `ProtectedData::Unprotect`, so cookie decryption no longer fails on machines that only have Windows PowerShell 5.1.
+- PowerShell invocation failures now report the underlying error from each candidate executable instead of a generic message.
+
 ## 0.3.13 - 2026-07-28
 
 ### Added
