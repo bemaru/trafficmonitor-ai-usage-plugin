@@ -226,7 +226,7 @@ function Start-HiddenWatch {
         }
     }
 
-    $nodePath = (Get-Command node -CommandType Application).Source
+    $nodePath = (Get-Command node -CommandType Application | Select-Object -First 1).Source
     $helperScriptPath = Join-Path $helperDir 'index.mjs'
     $escapedHelperScriptPath = $helperScriptPath.Replace('"', '\"')
     $arguments = "--disable-warning=ExperimentalWarning `"$escapedHelperScriptPath`" watch"
