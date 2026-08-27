@@ -108,15 +108,20 @@ const TestCase* FindTestCase(const std::wstring& name)
     return nullptr;
 }
 
+std::filesystem::path FixtureSessionPath(const std::filesystem::path& root)
+{
+    return root / L"sessions" / L"2026" / L"07" / L"27" / L"rollout-test.jsonl";
+}
+
 std::filesystem::path CreateFixture(const TestCase& test_case)
 {
     const std::filesystem::path root =
         std::filesystem::temp_directory_path() /
         (L"trafficmonitor-ai-usage-plugin-test-" + std::to_wstring(GetCurrentProcessId()));
-    const std::filesystem::path sessions = root / L"sessions" / L"2026" / L"07" / L"27";
-    std::filesystem::create_directories(sessions);
+    const std::filesystem::path session_path = FixtureSessionPath(root);
+    std::filesystem::create_directories(session_path.parent_path());
 
-    std::ofstream output(sessions / L"rollout-test.jsonl", std::ios::binary);
+    std::ofstream output(session_path, std::ios::binary);
     if (test_case.preceding_rate_limits != nullptr)
     {
         output
@@ -161,7 +166,15 @@ bool ExpectTooltip(ITMPlugin* plugin, const TestCase& test_case)
     const std::wstring codex_tooltip = tooltip.substr(codex_start);
     const auto expect_metric = [&](const wchar_t* label, const wchar_t* expected) {
         const std::wstring value = (std::wstring(expected) == L"--" ? L"unavailable" : expected);
-        const std::wstring expected_line = std::wstring(L"\n") + label + L": " + value;
+        const std::wstring metric_prefix = std::wstring(L"\n") + label + L": ";
+        const size_t metric_start = codex_tooltip.find(metric_prefix);
+        if (metric_start != std::wstring::npos &&
+            codex_tooltip.find(metric_prefix, metric_start + metric_prefix.size()) != std::wstring::npos)
+        {
+            std::wcerr << L"Codex tooltip contains duplicate " << label << L" lines.\n";
+            return false;
+        }
+        const std::wstring expected_line = metric_prefix + value;
         if (codex_tooltip.find(expected_line) != std::wstring::npos)
             return true;
 
@@ -176,6 +189,59 @@ bool ExpectTooltip(ITMPlugin* plugin, const TestCase& test_case)
     const bool seven_day_passed = expect_metric(L"7d", test_case.expected_7d);
     return five_hour_passed && seven_day_passed;
 }
+
+bool ExpectSnapshot(ITMPlugin* plugin, const TestCase& test_case)
+{
+    plugin->DataRequired();
+    const bool five_hour_passed = ExpectValue(plugin->GetItem(2), test_case.expected_5h, L"Codex 5h");
+    const bool seven_day_passed = ExpectValue(plugin->GetItem(3), test_case.expected_7d, L"Codex 7d");
+    const bool tooltip_passed = ExpectTooltip(plugin, test_case);
+    return five_hour_passed && seven_day_passed && tooltip_passed;
+}
+
+bool TestTimedRefresh(ITMPlugin* plugin, const std::filesystem::path& fixture_root)
+{
+    // Catch a plugin that stops rereading after its first successful load, or
+    // retains an old 5-hour value when the newer snapshot is weekly-only.
+    // The initial weekly-primary snapshot has already been asserted by the caller.
+    const struct RefreshStep
+    {
+        const wchar_t* scenario;
+        const char* timestamp;
+    } steps[] = {
+        { L"both-windows", "2026-07-27T08:13:08Z" },
+        { L"both-to-weekly", "2026-07-27T08:14:08Z" },
+    };
+
+    for (const RefreshStep& step : steps)
+    {
+        const TestCase& expected = *FindTestCase(step.scenario);
+        std::ofstream output(FixtureSessionPath(fixture_root), std::ios::binary | std::ios::app);
+        output << R"({"timestamp":")" << step.timestamp
+            << R"(","type":"event_msg","payload":{"type":"token_count","rate_limits":)"
+            << expected.rate_limits << "}}\n";
+        output.close();
+        if (!output)
+        {
+            std::wcerr << L"Failed to append refresh fixture for " << step.scenario << L".\n";
+            return false;
+        }
+
+        std::wcout << L"WAIT refresh to " << step.scenario << L" (65 seconds)\n" << std::flush;
+        // Exercise the real 60-second success interval without a test-only clock
+        // or unloading/reinitializing the DLL; keep all data in the same session.
+        for (int second = 0; second < 65; ++second)
+            Sleep(1000);
+
+        if (!ExpectSnapshot(plugin, expected))
+        {
+            std::wcerr << L"FAIL timed refresh to " << step.scenario << L"\n";
+            return false;
+        }
+        std::wcout << L"PASS timed refresh to " << step.scenario << L"\n" << std::flush;
+    }
+    return true;
+}
 }
 
 int wmain(int argc, wchar_t* argv[])
@@ -186,7 +252,8 @@ int wmain(int argc, wchar_t* argv[])
         return 2;
     }
 
-    const TestCase* test_case = FindTestCase(argv[2]);
+    const bool timed_refresh = std::wstring(argv[2]) == L"refresh-weekly-both-weekly";
+    const TestCase* test_case = FindTestCase(timed_refresh ? L"weekly-primary" : argv[2]);
     if (test_case == nullptr)
     {
         std::wcerr << L"Unknown scenario: " << argv[2] << L"\n";
@@ -217,17 +284,17 @@ int wmain(int argc, wchar_t* argv[])
     }
 
     ITMPlugin* plugin = get_instance();
-    plugin->DataRequired();
-
-    const bool five_hour_passed = ExpectValue(plugin->GetItem(2), test_case->expected_5h, L"Codex 5h");
-    const bool seven_day_passed = ExpectValue(plugin->GetItem(3), test_case->expected_7d, L"Codex 7d");
-    const bool tooltip_passed = ExpectTooltip(plugin, *test_case);
-    const bool passed = five_hour_passed && seven_day_passed && tooltip_passed;
+    bool passed = ExpectSnapshot(plugin, *test_case);
+    if (passed && timed_refresh)
+    {
+        std::wcout << L"PASS initial weekly-only snapshot\n" << std::flush;
+        passed = TestTimedRefresh(plugin, fixture_root);
+    }
 
     std::filesystem::remove_all(fixture_root);
     if (!passed)
         return 1;
 
-    std::wcout << L"PASS " << test_case->name << L"\n";
+    std::wcout << L"PASS " << argv[2] << L"\n";
     return 0;
 }

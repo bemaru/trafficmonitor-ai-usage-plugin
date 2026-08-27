@@ -2,7 +2,8 @@ param(
     [ValidateSet('x64', 'Win32')]
     [string]$Platform = 'x64',
     [ValidateSet('Debug', 'Release')]
-    [string]$Configuration = 'Release'
+    [string]$Configuration = 'Release',
+    [switch]$IncludeRefreshTests
 )
 
 $ErrorActionPreference = 'Stop'
@@ -51,6 +52,10 @@ $scenarios = @(
     'weekly-to-swapped',
     'both-to-weekly'
 )
+if ($IncludeRefreshTests) {
+    $scenarios += 'refresh-weekly-both-weekly'
+    Write-Host 'Including timed refresh coverage (two 65-second waits).'
+}
 
 foreach ($scenario in $scenarios) {
     & $testPath $pluginPath $scenario
@@ -59,4 +64,4 @@ foreach ($scenario in $scenarios) {
     }
 }
 
-Write-Host "All Codex usage window classification tests passed ($Configuration|$Platform)."
+Write-Host "All $($scenarios.Count) Codex usage window classification tests passed ($Configuration|$Platform)."
