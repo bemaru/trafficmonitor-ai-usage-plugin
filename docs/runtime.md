@@ -17,6 +17,7 @@ Codex usage limits:
 - Converts local `remaining_percent` payloads to used percentage before display when needed
 - Classifies a `300` minute window as `X5h` and a `10080` minute window as `X7d`, regardless of whether the payload places it in `primary` or `secondary`
 - Uses the legacy `primary` / `secondary` mapping only when `window_minutes` is absent
+- A missing window is displayed as `--`, not `0%`. If a 5-hour window returns in a newer session snapshot, it is picked up on the next refresh without a mode switch; the plugin does not assume every account has both windows
 - Respects `CODEX_HOME` when it resolves to a Windows-readable path, including WSL-style `/mnt/c/...` paths
 
 ## `CODEX_HOME` Notes
