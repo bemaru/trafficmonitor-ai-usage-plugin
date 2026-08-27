@@ -17,6 +17,7 @@ struct TestCase
     const char* rate_limits;
     const wchar_t* expected_5h;
     const wchar_t* expected_7d;
+    const char* preceding_rate_limits = nullptr;
 };
 
 const TestCase TEST_CASES[] = {
@@ -50,6 +51,51 @@ const TestCase TEST_CASES[] = {
         L"--",
         L"--",
     },
+    {
+        L"five-hour-primary",
+        R"({"primary":{"used_percent":12,"window_minutes":300,"resets_at":1893456000},"secondary":null})",
+        L"12%",
+        L"--",
+    },
+    {
+        L"five-hour-secondary",
+        R"({"primary":null,"secondary":{"used_percent":12,"window_minutes":300,"resets_at":1893456000}})",
+        L"12%",
+        L"--",
+    },
+    {
+        L"both-windows-zero",
+        R"({"primary":{"used_percent":0,"window_minutes":300,"resets_at":1893456000},"secondary":{"used_percent":0,"window_minutes":10080,"resets_at":1893456000}})",
+        L"0%",
+        L"0%",
+    },
+    {
+        L"remaining-percent-swapped",
+        R"({"primary":{"remaining_percent":66,"window_minutes":10080,"resets_at":1893456000},"secondary":{"remaining_percent":88,"window_minutes":300,"resets_at":1893456000}})",
+        L"12%",
+        L"34%",
+    },
+    {
+        L"weekly-to-both",
+        R"({"limit_id":"codex","limit_name":null,"primary":{"used_percent":12,"window_minutes":300,"resets_at":1893456000},"secondary":{"used_percent":34,"window_minutes":10080,"resets_at":1893456000},"credits":{"has_credits":false,"unlimited":false,"balance":"0"},"plan_type":"pro"})",
+        L"12%",
+        L"34%",
+        R"({"primary":{"used_percent":30,"window_minutes":10080,"resets_at":1893456000},"secondary":null})",
+    },
+    {
+        L"weekly-to-swapped",
+        R"({"primary":{"used_percent":34,"window_minutes":10080,"resets_at":1893456000},"secondary":{"used_percent":12,"window_minutes":300,"resets_at":1893456000}})",
+        L"12%",
+        L"34%",
+        R"({"primary":{"used_percent":30,"window_minutes":10080,"resets_at":1893456000},"secondary":null})",
+    },
+    {
+        L"both-to-weekly",
+        R"({"primary":{"used_percent":35,"window_minutes":10080,"resets_at":1893456000},"secondary":null})",
+        L"--",
+        L"35%",
+        R"({"primary":{"used_percent":12,"window_minutes":300,"resets_at":1893456000},"secondary":{"used_percent":34,"window_minutes":10080,"resets_at":1893456000}})",
+    },
 };
 
 const TestCase* FindTestCase(const std::wstring& name)
@@ -71,6 +117,13 @@ std::filesystem::path CreateFixture(const TestCase& test_case)
     std::filesystem::create_directories(sessions);
 
     std::ofstream output(sessions / L"rollout-test.jsonl", std::ios::binary);
+    if (test_case.preceding_rate_limits != nullptr)
+    {
+        output
+            << R"({"timestamp":"2026-07-27T08:11:08Z","type":"event_msg","payload":{"type":"token_count","rate_limits":)"
+            << test_case.preceding_rate_limits
+            << "}}\n";
+    }
     output
         << R"({"timestamp":"2026-07-27T08:12:08Z","type":"event_msg","payload":{"type":"token_count","rate_limits":)"
         << test_case.rate_limits
@@ -93,6 +146,35 @@ bool ExpectValue(IPluginItem* item, const wchar_t* expected, const wchar_t* labe
 
     std::wcerr << label << L": expected \"" << expected << L"\", got \"" << actual << L"\".\n";
     return false;
+}
+
+bool ExpectTooltip(ITMPlugin* plugin, const TestCase& test_case)
+{
+    const std::wstring tooltip = plugin->GetTooltipInfo();
+    const size_t codex_start = tooltip.find(L"Codex usage limits");
+    if (codex_start == std::wstring::npos)
+    {
+        std::wcerr << L"Codex tooltip was not available.\n";
+        return false;
+    }
+
+    const std::wstring codex_tooltip = tooltip.substr(codex_start);
+    const auto expect_metric = [&](const wchar_t* label, const wchar_t* expected) {
+        const std::wstring value = (std::wstring(expected) == L"--" ? L"unavailable" : expected);
+        const std::wstring expected_line = std::wstring(L"\n") + label + L": " + value;
+        if (codex_tooltip.find(expected_line) != std::wstring::npos)
+            return true;
+
+        std::wcerr << L"Codex tooltip missing " << label << L": " << value << L".\n";
+        return false;
+    };
+
+    if (std::wstring(test_case.expected_5h) == L"--" && std::wstring(test_case.expected_7d) == L"--")
+        return codex_tooltip.find(L"Codex usage limits unavailable") == 0;
+
+    const bool five_hour_passed = expect_metric(L"5h", test_case.expected_5h);
+    const bool seven_day_passed = expect_metric(L"7d", test_case.expected_7d);
+    return five_hour_passed && seven_day_passed;
 }
 }
 
@@ -137,9 +219,10 @@ int wmain(int argc, wchar_t* argv[])
     ITMPlugin* plugin = get_instance();
     plugin->DataRequired();
 
-    const bool passed =
-        ExpectValue(plugin->GetItem(2), test_case->expected_5h, L"Codex 5h") &&
-        ExpectValue(plugin->GetItem(3), test_case->expected_7d, L"Codex 7d");
+    const bool five_hour_passed = ExpectValue(plugin->GetItem(2), test_case->expected_5h, L"Codex 5h");
+    const bool seven_day_passed = ExpectValue(plugin->GetItem(3), test_case->expected_7d, L"Codex 7d");
+    const bool tooltip_passed = ExpectTooltip(plugin, *test_case);
+    const bool passed = five_hour_passed && seven_day_passed && tooltip_passed;
 
     std::filesystem::remove_all(fixture_root);
     if (!passed)

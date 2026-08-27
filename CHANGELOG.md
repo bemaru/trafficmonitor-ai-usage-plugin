@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Added
+- Expanded Codex DLL-level regression tests for returning 5-hour limits, same-file weekly-only transitions, single 5-hour windows, zero usage, remaining-percentage payloads, and tooltip consistency (issue #18).
+
 ## 0.3.13 - 2026-07-28
 
 ### Added

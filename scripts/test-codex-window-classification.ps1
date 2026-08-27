@@ -42,7 +42,14 @@ $scenarios = @(
     'both-windows',
     'swapped-windows',
     'legacy-no-window',
-    'unknown-window'
+    'unknown-window',
+    'five-hour-primary',
+    'five-hour-secondary',
+    'both-windows-zero',
+    'remaining-percent-swapped',
+    'weekly-to-both',
+    'weekly-to-swapped',
+    'both-to-weekly'
 )
 
 foreach ($scenario in $scenarios) {
