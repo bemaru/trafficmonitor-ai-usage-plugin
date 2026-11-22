@@ -24,7 +24,7 @@ Windows에서 이런 AI 사용량 한도를 편하게 볼 수 있는 적절한 �
 - Windows 작업 표시줄에 `C5h`, `C7d`, `X5h`, `X7d`를 사용률 퍼센트로 표시
 - 데이터 소스가 초기화 정보를 제공하면 툴팁에 초기화 시간 표시
 - Claude 값은 포함된 Claude web helper로 읽음
-- Codex 값은 로컬 session JSONL 파일에서 읽고 `CODEX_HOME` 지원
+- Codex 값은 최신 web helper 데이터를 우선하고 로컬 session JSONL 및 `CODEX_HOME`을 fallback으로 지원
 - 오래된 Claude 값을 계속 유지하지 않고, 만료된 데이터는 unavailable로 전환
 
 ## 빠른 시작
@@ -46,9 +46,14 @@ TrafficMonitor
    ├─ ClaudeUsagePlugin.dll
    └─ ClaudeUsagePlugin
       ├─ claude-web-helper.ps1
+      ├─ codex-web-helper.ps1
       └─ helper
-         └─ claude-web-helper
-            ├─ index.mjs
+         ├─ claude-web-helper
+         │  ├─ index.mjs
+         │  ├─ package.json
+         │  └─ package-lock.json
+         └─ codex-web-helper
+            ├─ *.mjs
             ├─ package.json
             └─ package-lock.json
 ```
@@ -61,10 +66,29 @@ TrafficMonitor
 powershell -ExecutionPolicy Bypass -File .\plugins\ClaudeUsagePlugin\claude-web-helper.ps1 login
 ```
 
-7. Codex 상태가 `%USERPROFILE%\.codex`에 저장되어 있지 않다면 TrafficMonitor를 실행하기 전에 Windows 환경 변수 `CODEX_HOME`을 설정합니다.
-   해당 디렉터리 아래 session JSONL 파일에 rate-limit payload가 생기기 전까지 Codex는 unavailable로 표시됩니다.
+7. 독립적인 Codex web 사용량을 보려면 전용 Chrome 프로필에서 최초 1회 로그인합니다.
 
-helper 파일이 `plugins\ClaudeUsagePlugin` 아래에 있으면, 최초 로그인 후 플러그인 로드 시 포함된 Claude watcher가 자동으로 시작될 수 있습니다.
+```powershell
+powershell -ExecutionPolicy Bypass -File .\plugins\ClaudeUsagePlugin\codex-web-helper.ps1 login
+```
+
+로그인 창을 닫고 TrafficMonitor를 재시작하면 플러그인이 저장된 로그인을
+재사용하여 Codex watcher를 자동으로 시작합니다. 이미 watcher가 실행 중인
+상태에서 다시 로그인하려면 먼저 `stop`을 실행합니다. 재시작 없이 시작하려면
+`start`, 한 번 갱신하려면 `once`, 상태 조회는 `status`, 중지는 `stop`을
+사용합니다. `stop`으로 중지한 watcher는 현재 플러그인 인스턴스에서는
+중지 상태를 유지하며, 플러그인을 다시 로드하면 자동으로 시작합니다.
+Codex CLI 세션이나 수동 토큰 복사는 필요하지 않습니다.
+선택적인 JSONL fallback을 사용할 때 Codex 상태가
+`%USERPROFILE%\.codex` 이외의 경로에 있다면 `CODEX_HOME`을 설정합니다.
+
+Codex helper는 이 소스에서 빌드한 결과물에 포함됩니다. 기존 v0.3.11 릴리스
+압축 파일에는 없으므로 이 기능은 로컬 빌드로 사용하세요.
+
+helper 파일이 `plugins\ClaudeUsagePlugin` 아래에 있으면 플러그인 로드 시
+Claude와 Codex watcher가 자동으로 시작됩니다. 플러그인 인스턴스마다 한 번
+시작을 시도하며, 예약 작업·Windows 서비스·별도 Windows 시작 항목은 만들지 않습니다.
+Codex는 전용 Chrome 프로필이 로그인으로 초기화되기 전에는 자동시작을 건너뜁니다.
 
 스크린샷을 포함한 전체 설치 흐름은 [docs/install.md](docs/install.md)를 참고하세요.
 
@@ -85,13 +109,15 @@ helper 파일이 `plugins\ClaudeUsagePlugin` 아래에 있으면, 최초 로그�
 
 - Claude는 `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-usage.json`의 최신 helper snapshot을 읽습니다.
 - Claude helper 로그인은 전용 로컬 브라우저 프로필에 쿠키를 저장합니다. 자세한 내용은 [PRIVACY.md](PRIVACY.md)를 참고하세요.
-- Codex는 `%USERPROFILE%\.codex\sessions\**\*.jsonl`의 로컬 상태를 읽습니다.
-- Codex session JSONL 파일만 지원합니다. `logs_2.sqlite` fallback은 없습니다.
-- rate-limit payload가 포함된 session JSONL 파일이 없으면 Codex는 unavailable로 표시됩니다.
+- Codex는 `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\codex-web-usage.json`이 유효하고 180초 이내이면 우선 사용합니다.
+- Codex helper는 전용 Chrome 프로필에서 60초마다 갱신하며 세션 토큰은 브라우저 메모리 안에서만 사용합니다.
+- web 데이터를 사용할 수 없으면 `%USERPROFILE%\.codex\sessions\**\*.jsonl`을 fallback으로 읽습니다. `logs_2.sqlite` fallback은 없습니다.
+- web 조회가 실패하면 이전 snapshot을 삭제하며, 초기화 시각이 지난 구간은 오래된 값을 표시하지 않고 unavailable로 처리합니다.
 - Codex 로컬 payload는 `used_percent` 또는 `remaining_percent`를 제공할 수 있으며, 남은 값은 사용률로 변환됩니다.
 - `CODEX_HOME`은 Windows에서 읽을 수 있는 경로일 때 기본 Codex 경로를 대체합니다.
 - TrafficMonitor는 Windows에서 실행되므로 `/home/<user>/.codex` 같은 Linux 전용 경로는 읽을 수 없습니다.
 - Claude helper를 사용하려면 Node.js 22+와 로컬 Edge 또는 Chrome 설치가 필요합니다.
+- Codex helper에는 Node.js 22+와 Google Chrome이 필요합니다. 실인증 검증 현황은 [docs/codex-web-helper-investigation.md](docs/codex-web-helper-investigation.md)를 참고하세요.
 
 전체 runtime 모델과 helper 명령은 [docs/runtime.md](docs/runtime.md)를 참고하세요.
 
@@ -152,4 +178,4 @@ MSBuild.exe .\ClaudeUsagePlugin.sln /t:ClaudeUsagePlugin /p:Configuration=Releas
 
 - 플러그인은 로드됐지만 사용량 항목이 보이지 않음: 보통 아키텍처가 맞지 않거나 항목이 아직 활성화되지 않은 경우입니다. [docs/install.md](docs/install.md)와 [docs/troubleshooting.md](docs/troubleshooting.md)를 참고하세요.
 - Claude가 unavailable로 표시됨: 보통 helper snapshot이 없거나 오래됐거나 Claude 로그인이 만료된 경우입니다. [docs/runtime.md](docs/runtime.md)와 [docs/troubleshooting.md](docs/troubleshooting.md)를 참고하세요.
-- Codex 값이 보이지 않음: `CODEX_HOME`, Windows 경로 접근 가능 여부, Codex가 최근 session JSONL rate-limit 데이터를 기록했는지 확인하세요. [docs/troubleshooting.md](docs/troubleshooting.md)를 참고하세요.
+- Codex 값이 보이지 않음: `codex-web-helper.ps1 status`를 확인하고 필요하면 전용 프로필에서 다시 로그인하세요. JSONL fallback은 `CODEX_HOME`과 최근 rate-limit 데이터를 확인하세요. [docs/troubleshooting.md](docs/troubleshooting.md)를 참고하세요.

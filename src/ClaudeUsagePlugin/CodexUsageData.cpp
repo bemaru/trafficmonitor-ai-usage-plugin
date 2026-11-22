@@ -8,6 +8,7 @@
 #include <cstring>
 #include <cwctype>
 #include <climits>
+#include <map>
 #include <share.h>
 #include <string>
 #include <vector>
@@ -18,6 +19,9 @@ constexpr unsigned long long REFRESH_INTERVAL_MS = 60ULL * 1000ULL;
 constexpr unsigned long long RETRY_INTERVAL_MS = 5ULL * 1000ULL;
 constexpr unsigned long long MAX_TEXT_FILE_SIZE = 32ULL * 1024ULL * 1024ULL;
 constexpr long long RECENT_EVENT_WINDOW_SECONDS = 15LL * 60LL;
+constexpr long long WEB_CACHE_MAX_AGE_SECONDS = 180LL;
+constexpr long long WEB_CACHE_CLOCK_SKEW_SECONDS = 30LL;
+constexpr unsigned long long MAX_WEB_JSON_FILE_SIZE = 64ULL * 1024ULL;
 constexpr wchar_t CODEX_SESSION_DIR_NAME[] = L"sessions";
 
 struct SessionFileCandidate
@@ -137,6 +141,29 @@ std::wstring GetCodexConfigDir()
     return JoinPath(home, L".codex");
 }
 
+std::wstring GetCodexWebUsagePath()
+{
+    std::wstring cache_root = TrimString(GetEnvVar(L"LOCALAPPDATA"));
+    if (cache_root.empty())
+    {
+        const std::wstring home = TrimString(GetEnvVar(L"USERPROFILE"));
+        if (home.empty())
+            return std::wstring();
+        cache_root = JoinPath(home, L".cache");
+    }
+    return JoinPath(JoinPath(cache_root, L"trafficmonitor-claude-usage-plugin"), L"codex-web-usage.json");
+}
+
+long long GetNowUnixSeconds()
+{
+    FILETIME file_time{};
+    GetSystemTimeAsFileTime(&file_time);
+    ULARGE_INTEGER value{};
+    value.LowPart = file_time.dwLowDateTime;
+    value.HighPart = file_time.dwHighDateTime;
+    return static_cast<long long>((value.QuadPart - 116444736000000000ULL) / 10000000ULL);
+}
+
 bool FileExists(const std::wstring& path)
 {
     DWORD attributes = GetFileAttributesW(path.c_str());
@@ -147,6 +174,93 @@ bool DirectoryExists(const std::wstring& path)
 {
     DWORD attributes = GetFileAttributesW(path.c_str());
     return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+}
+
+std::wstring GetDirectoryPath(const std::wstring& path)
+{
+    const size_t separator = path.find_last_of(L"\\/");
+    return separator == std::wstring::npos ? std::wstring() : path.substr(0, separator);
+}
+
+std::wstring GetCurrentModulePath()
+{
+    HMODULE module_handle{};
+    if (!GetModuleHandleExW(
+        GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+        reinterpret_cast<LPCWSTR>(&GetCurrentModulePath), &module_handle))
+        return std::wstring();
+
+    std::wstring module_path(MAX_PATH, L'\0');
+    DWORD length = GetModuleFileNameW(module_handle, &module_path[0], static_cast<DWORD>(module_path.size()));
+    while (length >= module_path.size() - 1)
+    {
+        module_path.resize(module_path.size() * 2);
+        length = GetModuleFileNameW(module_handle, &module_path[0], static_cast<DWORD>(module_path.size()));
+    }
+    if (length == 0)
+        return std::wstring();
+    module_path.resize(length);
+    return module_path;
+}
+
+bool HasInitializedHelperProfile()
+{
+    const std::wstring cache_dir = GetDirectoryPath(GetCodexWebUsagePath());
+    if (cache_dir.empty())
+        return false;
+    const std::wstring profile_dir = JoinPath(cache_dir, L"codex-browser-profile");
+    // Check only file existence, never cookie contents. Authentication belongs
+    // to the helper; automatic startup must not create a profile or open login.
+    return FileExists(JoinPath(profile_dir, L"Local State")) &&
+        (FileExists(JoinPath(profile_dir, L"Default\\Network\\Cookies")) ||
+            FileExists(JoinPath(profile_dir, L"Default\\Cookies")));
+}
+
+std::wstring FindBundledHelperScriptPath()
+{
+    const std::wstring module_dir = GetDirectoryPath(GetCurrentModulePath());
+    if (module_dir.empty())
+        return std::wstring();
+    for (const wchar_t* relative_path : {
+        L"ClaudeUsagePlugin\\codex-web-helper.ps1",
+        L"codex-web-helper.ps1",
+        L"..\\..\\..\\scripts\\codex-web-helper.ps1",
+        L"..\\..\\..\\..\\scripts\\codex-web-helper.ps1" })
+    {
+        const std::wstring script_path = JoinPath(module_dir, relative_path);
+        if (FileExists(script_path))
+            return script_path;
+    }
+    return std::wstring();
+}
+
+bool LaunchBundledHelperStart(const std::wstring& script_path)
+{
+    if (script_path.empty() || !FileExists(script_path))
+        return false;
+    const std::wstring script_dir = GetDirectoryPath(script_path);
+    if (script_dir.empty() || !DirectoryExists(script_dir))
+        return false;
+    std::wstring powershell_path = JoinPath(TrimString(GetEnvVar(L"SystemRoot")), L"System32\\WindowsPowerShell\\v1.0\\powershell.exe");
+    if (!FileExists(powershell_path))
+        powershell_path = L"powershell.exe";
+
+    std::wstring command_line = L"\"" + powershell_path +
+        L"\" -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File \"" + script_path + L"\" start";
+    STARTUPINFOW startup_info{};
+    startup_info.cb = sizeof(startup_info);
+    startup_info.dwFlags = STARTF_USESHOWWINDOW;
+    startup_info.wShowWindow = SW_HIDE;
+    PROCESS_INFORMATION process_info{};
+    command_line.push_back(L'\0');
+    const BOOL created = CreateProcessW(
+        powershell_path.c_str(), &command_line[0], nullptr, nullptr, FALSE,
+        CREATE_NO_WINDOW, nullptr, script_dir.c_str(), &startup_info, &process_info);
+    if (!created)
+        return false;
+    CloseHandle(process_info.hThread);
+    CloseHandle(process_info.hProcess);
+    return true;
 }
 
 bool GetFileSizeBytes(const std::wstring& path, unsigned long long& size)
@@ -367,6 +481,178 @@ bool TryParseIso8601UtcSeconds(const std::string& timestamp, long long& unix_sec
     return true;
 }
 
+bool TryParseWebUtcSeconds(const std::string& timestamp, long long& unix_seconds)
+{
+    // The helper writes Date.toISOString(): require an explicit UTC suffix.
+    if (timestamp.size() < 20 || timestamp.back() != 'Z')
+        return false;
+    for (size_t index = 0; index < 19; ++index)
+    {
+        const char expected = (index == 4 || index == 7 ? '-' :
+            (index == 10 ? 'T' : (index == 13 || index == 16 ? ':' : '\0')));
+        if (expected != '\0' ? timestamp[index] != expected :
+            timestamp[index] < '0' || timestamp[index] > '9')
+            return false;
+    }
+    if (timestamp.size() != 20)
+    {
+        if (timestamp.size() < 22 || timestamp[19] != '.')
+            return false;
+        for (size_t index = 20; index + 1 < timestamp.size(); ++index)
+            if (timestamp[index] < '0' || timestamp[index] > '9')
+                return false;
+    }
+    return TryParseIso8601UtcSeconds(timestamp, unix_seconds);
+}
+
+using WebJsonObject = std::map<std::string, std::string>;
+
+void SkipJsonWhitespace(const std::string& text, size_t& position)
+{
+    while (position < text.size() &&
+        (text[position] == ' ' || text[position] == '\t' || text[position] == '\r' || text[position] == '\n'))
+        ++position;
+}
+
+bool SkipJsonString(const std::string& text, size_t& position)
+{
+    if (position >= text.size() || text[position++] != '"')
+        return false;
+    while (position < text.size())
+    {
+        const unsigned char ch = static_cast<unsigned char>(text[position++]);
+        if (ch == '"')
+            return true;
+        if (ch < 0x20)
+            return false;
+        if (ch == '\\')
+        {
+            if (position >= text.size())
+                return false;
+            const char escaped = text[position++];
+            if (escaped == 'u')
+            {
+                for (int index = 0; index < 4; ++index)
+                    if (position >= text.size() || !isxdigit(static_cast<unsigned char>(text[position++])))
+                        return false;
+            }
+            else if (strchr("\"\\/bfnrt", escaped) == nullptr)
+                return false;
+        }
+    }
+    return false;
+}
+
+bool ParseWebJsonValue(const std::string& text, size_t& position, int depth, WebJsonObject* members)
+{
+    SkipJsonWhitespace(text, position);
+    if (position >= text.size() || depth > 8)
+        return false;
+    if (text[position] == '{')
+    {
+        ++position;
+        SkipJsonWhitespace(text, position);
+        WebJsonObject parsed;
+        if (position < text.size() && text[position] != '}')
+        {
+            while (true)
+            {
+                const size_t key_start = position;
+                if (!SkipJsonString(text, position))
+                    return false;
+                const std::string key = text.substr(key_start, position - key_start);
+                SkipJsonWhitespace(text, position);
+                if (position >= text.size() || text[position++] != ':')
+                    return false;
+                SkipJsonWhitespace(text, position);
+                const size_t value_start = position;
+                if (!ParseWebJsonValue(text, position, depth + 1, nullptr) ||
+                    !parsed.emplace(key, text.substr(value_start, position - value_start)).second)
+                    return false;
+                SkipJsonWhitespace(text, position);
+                if (position >= text.size())
+                    return false;
+                if (text[position] != ',')
+                    break;
+                ++position;
+                SkipJsonWhitespace(text, position);
+            }
+        }
+        if (position >= text.size() || text[position++] != '}')
+            return false;
+        if (members)
+            *members = std::move(parsed);
+        return true;
+    }
+    if (members)
+        return false;
+    if (text[position] == '"')
+        return SkipJsonString(text, position);
+    for (const char* literal : { "null", "true", "false" })
+    {
+        const size_t length = strlen(literal);
+        if (text.compare(position, length, literal) == 0)
+        {
+            position += length;
+            return true;
+        }
+    }
+    // Snapshots only contain objects and scalars; reject malformed numbers.
+    if (text[position] == '-')
+        ++position;
+    if (position >= text.size() || !isdigit(static_cast<unsigned char>(text[position])))
+        return false;
+    if (text[position] == '0')
+        ++position;
+    else
+        while (position < text.size() && isdigit(static_cast<unsigned char>(text[position])))
+            ++position;
+    if (position < text.size() && text[position] == '.')
+    {
+        const size_t fraction = ++position;
+        while (position < text.size() && isdigit(static_cast<unsigned char>(text[position])))
+            ++position;
+        if (position == fraction)
+            return false;
+    }
+    if (position < text.size() && (text[position] == 'e' || text[position] == 'E'))
+    {
+        ++position;
+        if (position < text.size() && (text[position] == '+' || text[position] == '-'))
+            ++position;
+        const size_t exponent = position;
+        while (position < text.size() && isdigit(static_cast<unsigned char>(text[position])))
+            ++position;
+        if (position == exponent)
+            return false;
+    }
+    return true;
+}
+
+bool ParseWebJsonObject(const std::string& text, WebJsonObject& members)
+{
+    size_t position{};
+    if (!ParseWebJsonValue(text, position, 0, &members))
+        return false;
+    SkipJsonWhitespace(text, position);
+    return position == text.size();
+}
+
+bool ReadWebJsonFile(const std::wstring& path, std::string& json)
+{
+    unsigned long long file_size{};
+    if (!GetFileSizeBytes(path, file_size) || file_size == 0 || file_size > MAX_WEB_JSON_FILE_SIZE)
+        return false;
+    FILE* file = _wfsopen(path.c_str(), L"rb", _SH_DENYNO);
+    if (file == nullptr)
+        return false;
+    json.resize(static_cast<size_t>(file_size));
+    const size_t read_size = fread(&json[0], 1, json.size(), file);
+    const bool succeeded = read_size == json.size() && ferror(file) == 0;
+    fclose(file);
+    return succeeded;
+}
+
 bool UnixSecondsToLocalText(long long unix_seconds, std::wstring& text)
 {
     if (unix_seconds < 0)
@@ -502,6 +788,113 @@ std::wstring BuildMetricTooltip(const wchar_t* label, const CCodexUsageData::Met
     return text;
 }
 
+bool TryGetWebString(const WebJsonObject& members, const char* key, std::string& value)
+{
+    const auto member = members.find(std::string("\"") + key + "\"");
+    if (member == members.end())
+        return false;
+    const std::string& raw = member->second;
+    if (raw.size() < 2 || raw.front() != '"' || raw.back() != '"' || raw.find('\\') != std::string::npos)
+        return false;
+    value = raw.substr(1, raw.size() - 2);
+    return true;
+}
+
+bool LoadWebMetric(const WebJsonObject& root, const char* key, long long window_seconds, CCodexUsageData::Metric& metric)
+{
+    const auto member = root.find(std::string("\"") + key + "\"");
+    WebJsonObject fields;
+    if (member == root.end() || !ParseWebJsonObject(member->second, fields))
+        return false;
+    const auto utilization = fields.find("\"utilization\"");
+    if (utilization == fields.end())
+        return false;
+    char* end{};
+    const std::string& raw = utilization->second;
+    const double percentage = strtod(raw.c_str(), &end);
+    if (end == raw.c_str() || *end != '\0' || !std::isfinite(percentage) || percentage < 0.0 || percentage > 100.0)
+        return false;
+    std::string reset_text;
+    long long reset_at{};
+    const long long now = GetNowUnixSeconds();
+    if (!TryGetWebString(fields, "resets_at", reset_text) || !TryParseWebUtcSeconds(reset_text, reset_at) ||
+        reset_at <= now || reset_at > now + window_seconds + 60LL)
+        return false;
+    metric.available = true;
+    metric.percentage = percentage;
+    metric.has_reset_time = true;
+    metric.reset_at_unix_seconds = reset_at;
+    UnixSecondsToLocalText(reset_at, metric.reset_time_text);
+    return true;
+}
+
+std::wstring GetWebHelperStatusSummary()
+{
+    const std::wstring usage_path = GetCodexWebUsagePath();
+    const size_t separator = usage_path.find_last_of(L"\\/");
+    if (separator == std::wstring::npos)
+        return std::wstring();
+    std::string json;
+    WebJsonObject fields;
+    std::string state;
+    if (!ReadWebJsonFile(usage_path.substr(0, separator + 1) + L"codex-web-helper-status.json", json) ||
+        !ParseWebJsonObject(json, fields) || !TryGetWebString(fields, "state", state))
+        return std::wstring();
+    if (state == "login_required")
+        return L"Codex web helper needs login";
+    if (state == "access_denied" || state == "account_unavailable")
+        return L"Codex web helper usage access was denied";
+    if (state == "rate_limited")
+        return L"Codex web helper hit a rate limit";
+    if (state == "cloudflare_blocked")
+        return L"Codex web helper is blocked by Cloudflare";
+    if (state == "login_browser_opened")
+        return L"Codex web helper login window is open";
+    if (state == "stopped")
+        return L"Codex web helper is stopped";
+    if (state == "ok")
+        return L"Codex web helper snapshot is missing, invalid, or expired";
+    if (state == "http_error" || state == "unexpected_response" || state == "request_timeout" ||
+        state == "request_failed" || state == "usage_unavailable")
+        return L"Codex web helper could not refresh usage";
+    if (state == "browser_not_found" || state == "browser_start_failed" || state == "browser_closed" ||
+        state == "browser_protocol_failed" || state == "browser_timeout" || state == "browser_evaluation_failed" ||
+        state == "navigation_failed" || state == "profile_in_use" || state == "process_check_failed" || state == "storage_failed")
+        return L"Codex web helper could not access its browser profile or local files";
+    return std::wstring();
+}
+
+bool IsWebSnapshotCurrent(const CCodexUsageData::Snapshot& snapshot)
+{
+    if (snapshot.web_updated_at_unix_seconds == 0)
+        return true;
+    const long long age = GetNowUnixSeconds() - snapshot.web_updated_at_unix_seconds;
+    return age >= -WEB_CACHE_CLOCK_SKEW_SECONDS && age <= WEB_CACHE_MAX_AGE_SECONDS &&
+        FileExists(GetCodexWebUsagePath());
+}
+
+bool HasExpiredMetric(const CCodexUsageData::Snapshot& snapshot)
+{
+    const long long now = GetNowUnixSeconds();
+    return (snapshot.rolling_5h.available && snapshot.rolling_5h.has_reset_time && snapshot.rolling_5h.reset_at_unix_seconds <= now) ||
+        (snapshot.rolling_7d.available && snapshot.rolling_7d.has_reset_time && snapshot.rolling_7d.reset_at_unix_seconds <= now);
+}
+
+void RemoveExpiredMetrics(CCodexUsageData::Snapshot& snapshot)
+{
+    if (!IsWebSnapshotCurrent(snapshot))
+    {
+        snapshot.rolling_5h = {};
+        snapshot.rolling_7d = {};
+        snapshot.error_text = L"Codex web helper snapshot unavailable or expired";
+        return;
+    }
+    const long long now = GetNowUnixSeconds();
+    for (CCodexUsageData::Metric* metric : { &snapshot.rolling_5h, &snapshot.rolling_7d })
+        if (metric->available && metric->has_reset_time && metric->reset_at_unix_seconds <= now)
+            *metric = {};
+}
+
 unsigned long long GetRefreshIntervalMs(bool last_refresh_succeeded)
 {
     return (last_refresh_succeeded ? REFRESH_INTERVAL_MS : RETRY_INTERVAL_MS);
@@ -522,11 +915,14 @@ bool LoadMetricFromRateLimitsSection(const std::string& section_json, const char
     else
         return false;
 
-    metric.available = true;
+    if (!std::isfinite(metric.percentage) || metric.percentage < 0.0 || metric.percentage > 100.0)
+        return false;
 
     long long reset_at{};
     if (TryGetJsonInt64(metric_json, "reset_at", reset_at) || TryGetJsonInt64(metric_json, "resets_at", reset_at))
     {
+        if (reset_at <= GetNowUnixSeconds())
+            return false;
         metric.has_reset_time = true;
         metric.reset_at_unix_seconds = reset_at;
         std::wstring reset_text;
@@ -536,6 +932,7 @@ bool LoadMetricFromRateLimitsSection(const std::string& section_json, const char
             metric.reset_time_text = std::to_wstring(reset_at);
     }
 
+    metric.available = true;
     return true;
 }
 
@@ -621,6 +1018,20 @@ bool IsMetricBetterForSelection(const CCodexUsageData::Metric& metric, const std
 {
     if (!metric.available)
         return false;
+
+    const long long now = GetNowUnixSeconds();
+    if (metric.has_reset_time)
+    {
+        if (metric.reset_at_unix_seconds <= now)
+            return false;
+    }
+    else
+    {
+        long long event_at{};
+        if (!TryParseIso8601UtcSeconds(event_timestamp, event_at) ||
+            event_at > now + WEB_CACHE_CLOCK_SKEW_SECONDS || now - event_at > RECENT_EVENT_WINDOW_SECONDS)
+            return false;
+    }
 
     if (!current.found)
         return true;
@@ -760,6 +1171,21 @@ CCodexUsageData& CCodexUsageData::Instance()
     return instance;
 }
 
+void CCodexUsageData::AutoStartBundledHelperIfNeeded()
+{
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    if (m_helper_auto_start_attempted)
+        return;
+    m_helper_auto_start_attempted = true;
+    if (!HasInitializedHelperProfile())
+        return;
+    // The wrapper validates the watch process and the helper owns an OS lock;
+    // do not duplicate its process identity or concurrency checks here.
+    const std::wstring script_path = FindBundledHelperScriptPath();
+    if (!script_path.empty())
+        LaunchBundledHelperStart(script_path);
+}
+
 void CCodexUsageData::RefreshIfNeeded()
 {
     const unsigned long long now = GetTickCount64();
@@ -768,8 +1194,9 @@ void CCodexUsageData::RefreshIfNeeded()
         if (m_refresh_in_progress)
             return;
 
+        const bool snapshot_expired = !IsWebSnapshotCurrent(m_snapshot) || HasExpiredMetric(m_snapshot);
         const unsigned long long refresh_interval_ms = GetRefreshIntervalMs(m_last_refresh_succeeded);
-        if (m_last_refresh_tick != 0 && now - m_last_refresh_tick < refresh_interval_ms)
+        if (!snapshot_expired && m_last_refresh_tick != 0 && now - m_last_refresh_tick < refresh_interval_ms)
             return;
 
         m_refresh_in_progress = true;
@@ -789,8 +1216,8 @@ const std::wstring& CCodexUsageData::GetValueText(CodexUsageWindow window) const
 {
     thread_local std::wstring value_text;
 
-    std::lock_guard<std::mutex> lock(m_state_mutex);
-    value_text = (window == CodexUsageWindow::Rolling5Hours ? m_snapshot.value_5h_text : m_snapshot.value_7d_text);
+    const Metric metric = GetMetric(window);
+    value_text = metric.available ? FormatPercentage(metric.percentage) : L"--";
     return value_text;
 }
 
@@ -800,6 +1227,9 @@ const CCodexUsageData::Metric& CCodexUsageData::GetMetric(CodexUsageWindow windo
 
     std::lock_guard<std::mutex> lock(m_state_mutex);
     metric = (window == CodexUsageWindow::Rolling5Hours ? m_snapshot.rolling_5h : m_snapshot.rolling_7d);
+    if (!IsWebSnapshotCurrent(m_snapshot) ||
+        (metric.available && metric.has_reset_time && metric.reset_at_unix_seconds <= GetNowUnixSeconds()))
+        metric = {};
     return metric;
 }
 
@@ -807,8 +1237,13 @@ const std::wstring& CCodexUsageData::GetTooltipText() const
 {
     thread_local std::wstring tooltip_text;
 
-    std::lock_guard<std::mutex> lock(m_state_mutex);
-    tooltip_text = m_snapshot.tooltip_text;
+    Snapshot snapshot;
+    {
+        std::lock_guard<std::mutex> lock(m_state_mutex);
+        snapshot = m_snapshot;
+    }
+    FinalizeSnapshot(snapshot);
+    tooltip_text = snapshot.tooltip_text;
     return tooltip_text;
 }
 
@@ -823,8 +1258,45 @@ bool CCodexUsageData::Refresh()
     return succeeded;
 }
 
+bool CCodexUsageData::LoadFromWebHelper(Snapshot& snapshot)
+{
+    std::string json;
+    WebJsonObject root;
+    if (!ReadWebJsonFile(GetCodexWebUsagePath(), json) || !ParseWebJsonObject(json, root))
+        return false;
+    const auto schema = root.find("\"schema_version\"");
+    const auto source = root.find("\"source\"");
+    if (schema == root.end() || schema->second != "1" ||
+        source == root.end() || source->second != "\"codex-web\"")
+        return false;
+    std::string updated_at;
+    long long updated_seconds{};
+    if (!TryGetWebString(root, "updated_at", updated_at) || !TryParseWebUtcSeconds(updated_at, updated_seconds))
+        return false;
+    const long long age = GetNowUnixSeconds() - updated_seconds;
+    if (age < -WEB_CACHE_CLOCK_SKEW_SECONDS || age > WEB_CACHE_MAX_AGE_SECONDS)
+        return false;
+
+    Snapshot candidate;
+    LoadWebMetric(root, "five_hour", 5LL * 60LL * 60LL, candidate.rolling_5h);
+    LoadWebMetric(root, "seven_day", 7LL * 24LL * 60LL * 60LL, candidate.rolling_7d);
+    if (!HasAvailableMetric(candidate))
+        return false;
+    candidate.source_text = L"Codex web helper";
+    candidate.web_updated_at_unix_seconds = updated_seconds;
+    snapshot = candidate;
+    return true;
+}
+
 bool CCodexUsageData::LoadFromStore(Snapshot& snapshot)
 {
+    Snapshot web_snapshot;
+    if (LoadFromWebHelper(web_snapshot))
+    {
+        snapshot = web_snapshot;
+        return true;
+    }
+
     const std::wstring config_dir = GetCodexConfigDir();
     if (config_dir.empty())
     {
@@ -907,7 +1379,8 @@ bool CCodexUsageData::LoadFromSessionJsonlStore(const std::wstring& store_dir, S
             snapshot.rolling_7d = seven_day.metric;
 
         snapshot.source_text = L"sessions JSONL";
-        return true;
+        if (HasAvailableMetric(snapshot))
+            return true;
     }
 
     snapshot.error_text = L"Codex sessions JSONL returned no rate limits";
@@ -916,6 +1389,7 @@ bool CCodexUsageData::LoadFromSessionJsonlStore(const std::wstring& store_dir, S
 
 void CCodexUsageData::FinalizeSnapshot(Snapshot& snapshot)
 {
+    RemoveExpiredMetrics(snapshot);
     snapshot.value_5h_text = (snapshot.rolling_5h.available ? FormatPercentage(snapshot.rolling_5h.percentage) : L"--");
     snapshot.value_7d_text = (snapshot.rolling_7d.available ? FormatPercentage(snapshot.rolling_7d.percentage) : L"--");
 
@@ -927,6 +1401,9 @@ void CCodexUsageData::FinalizeSnapshot(Snapshot& snapshot)
             snapshot.tooltip_text += L"\n";
             snapshot.tooltip_text += snapshot.error_text;
         }
+        const std::wstring helper_status = GetWebHelperStatusSummary();
+        if (!helper_status.empty())
+            snapshot.tooltip_text += L"\n" + helper_status;
         return;
     }
 
@@ -935,6 +1412,8 @@ void CCodexUsageData::FinalizeSnapshot(Snapshot& snapshot)
     snapshot.tooltip_text += BuildMetricTooltip(L"5h", snapshot.rolling_5h);
     snapshot.tooltip_text += L"\n";
     snapshot.tooltip_text += BuildMetricTooltip(L"7d", snapshot.rolling_7d);
+    if (!snapshot.source_text.empty())
+        snapshot.tooltip_text += L"\nSource: " + snapshot.source_text;
 }
 
 bool CCodexUsageData::HasAvailableMetric(const Snapshot& snapshot)

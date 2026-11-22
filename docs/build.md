@@ -28,15 +28,23 @@ MSBuild.exe .\ClaudeUsagePlugin.sln /t:ClaudeUsagePlugin /p:Configuration=Releas
 - `build\x64\Release\plugins\ClaudeUsagePlugin.dll`
 - `build\x64\Release\plugins\ClaudeUsagePlugin\claude-web-helper.ps1`
 - `build\x64\Release\plugins\ClaudeUsagePlugin\helper\claude-web-helper\...`
+- `build\x64\Release\plugins\ClaudeUsagePlugin\codex-web-helper.ps1`
+- `build\x64\Release\plugins\ClaudeUsagePlugin\helper\codex-web-helper\...`
 - `build\Release\plugins\ClaudeUsagePlugin.dll`
 - `build\Release\plugins\ClaudeUsagePlugin\claude-web-helper.ps1`
 - `build\Release\plugins\ClaudeUsagePlugin\helper\claude-web-helper\...`
+- `build\Release\plugins\ClaudeUsagePlugin\codex-web-helper.ps1`
+- `build\Release\plugins\ClaudeUsagePlugin\helper\codex-web-helper\...`
 
 The project file also contains `ARM64EC` configurations, but the published release assets are currently only `x64` and `x86`.
 
 ## Packaging Notes
 
 Package the built `plugins` output as one zip per architecture.
+Both helper packages are copied by the project build. Include every Codex
+helper `.mjs` module and `package*.json` file; no dependency installation is
+required. Browser profiles, usage/status snapshots, and watch locks are runtime
+data and must never be included in a package.
 
 Recommended asset names:
 

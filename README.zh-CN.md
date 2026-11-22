@@ -24,7 +24,7 @@
 - 在 Windows 任务栏中以已使用百分比显示 `C5h`, `C7d`, `X5h`, `X7d`
 - 当数据源提供重置时间信息时，在 tooltip 中显示重置时间
 - Claude 数值来自随插件发布的 Claude web helper
-- Codex 数值来自本地 session JSONL 文件，并支持 `CODEX_HOME`
+- Codex 优先使用最新 web helper 数据，以本地 session JSONL 和 `CODEX_HOME` 为 fallback
 - 不会长期保留过期 Claude 数据，过期后会显示 unavailable 状态
 
 ## 快速开始
@@ -46,9 +46,14 @@ TrafficMonitor
    ├─ ClaudeUsagePlugin.dll
    └─ ClaudeUsagePlugin
       ├─ claude-web-helper.ps1
+      ├─ codex-web-helper.ps1
       └─ helper
-         └─ claude-web-helper
-            ├─ index.mjs
+         ├─ claude-web-helper
+         │  ├─ index.mjs
+         │  ├─ package.json
+         │  └─ package-lock.json
+         └─ codex-web-helper
+            ├─ *.mjs
             ├─ package.json
             └─ package-lock.json
 ```
@@ -61,10 +66,27 @@ TrafficMonitor
 powershell -ExecutionPolicy Bypass -File .\plugins\ClaudeUsagePlugin\claude-web-helper.ps1 login
 ```
 
-7. 如果 Codex 状态不在 `%USERPROFILE%\.codex` 下，请在启动 TrafficMonitor 前设置 Windows 环境变量 `CODEX_HOME`。
-   在该目录下的 session JSONL 文件写入 rate-limit payload 之前，Codex 会显示 unavailable。
+7. 使用独立 Codex web 用量时，先在专用 Chrome profile 中登录一次：
 
-如果 helper 文件保留在 `plugins\ClaudeUsagePlugin` 下，完成首次登录后，插件加载时可以自动启动内置的 Claude watcher。
+```powershell
+powershell -ExecutionPolicy Bypass -File .\plugins\ClaudeUsagePlugin\codex-web-helper.ps1 login
+```
+
+关闭登录窗口后重启 TrafficMonitor，插件会使用保存的登录状态自动启动
+Codex watcher。无需重启时可手动运行 `start`；`once`、`status`、`stop`
+分别刷新一次、查看状态、停止 watcher。停止后，当前插件实例不会重复启动
+watcher；重新加载插件后会自动启动。无需 Codex CLI 会话或手动复制 token。
+如果使用 JSONL fallback
+且 Codex 状态不在 `%USERPROFILE%\.codex` 下，请设置 `CODEX_HOME`。
+
+Codex helper 包含在此源码的构建结果中；现有 v0.3.11 发布包不包含它，
+请使用本地构建体验此功能。
+
+如果 helper 文件保留在 `plugins\ClaudeUsagePlugin` 下，插件加载时会自动启动
+Claude 和 Codex watcher。每个插件实例只尝试启动一次；不会创建计划任务、
+Windows 服务或额外的 Windows 启动项。
+Codex 专用 Chrome profile 尚未通过登录初始化时会跳过自动启动。
+如果 watcher 已在运行，重新登录前请先执行 `stop`。
 
 完整截图安装流程请参考 [docs/install.md](docs/install.md)。
 
@@ -85,13 +107,15 @@ powershell -ExecutionPolicy Bypass -File .\plugins\ClaudeUsagePlugin\claude-web-
 
 - Claude 从 `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-usage.json` 读取最新的 helper snapshot。
 - Claude helper 登录会把 cookie 保存在专用本地浏览器 profile 中。详情请参考 [PRIVACY.md](PRIVACY.md)。
-- Codex 从 `%USERPROFILE%\.codex\sessions\**\*.jsonl` 读取本地状态。
-- Codex 只支持 session JSONL 文件，不再使用 `logs_2.sqlite` fallback。
-- 如果没有 session JSONL 文件包含 rate-limit payload，Codex 会显示 unavailable。
+- Codex 优先读取有效且不超过 180 秒的 `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\codex-web-usage.json`。
+- Codex helper 使用专用 Chrome profile，每 60 秒刷新，session token 仅在浏览器内存中使用。
+- web 数据不可用时，fallback 到 `%USERPROFILE%\.codex\sessions\**\*.jsonl`；没有 `logs_2.sqlite` fallback。
+- web 请求失败会删除旧 snapshot；已过重置时间的窗口不再显示旧值。
 - Codex 本地 payload 可能提供 `used_percent` 或 `remaining_percent`，remaining 值会被转换为 used percentage。
 - 当 `CODEX_HOME` 指向 Windows 可读取的位置时，会覆盖默认 Codex 路径。
 - TrafficMonitor 运行在 Windows 上，因此无法读取 `/home/<user>/.codex` 这类 Linux-only 路径。
 - Claude helper 需要 Node.js 22+，以及本地 Edge 或 Chrome。
+- Codex helper 需要 Node.js 22+ 和 Google Chrome；实登录验证状态请参考 [docs/codex-web-helper-investigation.md](docs/codex-web-helper-investigation.md)。
 
 完整 runtime 模型和 helper 命令请参考 [docs/runtime.md](docs/runtime.md)。
 
@@ -152,4 +176,4 @@ MSBuild.exe .\ClaudeUsagePlugin.sln /t:ClaudeUsagePlugin /p:Configuration=Releas
 
 - 插件已加载但使用量项目没有出现: 通常是架构不匹配，或者项目还没有启用。请参考 [docs/install.md](docs/install.md) 和 [docs/troubleshooting.md](docs/troubleshooting.md)。
 - Claude 显示 unavailable: 通常是 helper snapshot 不存在、已过期，或者 Claude 登录已失效。请参考 [docs/runtime.md](docs/runtime.md) 和 [docs/troubleshooting.md](docs/troubleshooting.md)。
-- Codex 数值不显示: 请检查 `CODEX_HOME`、Windows 路径可见性，以及 Codex 是否已写入最近的 session JSONL rate-limit 数据。请参考 [docs/troubleshooting.md](docs/troubleshooting.md)。
+- Codex 数值不显示: 先检查 `codex-web-helper.ps1 status`，必要时在专用 profile 中重新登录。JSONL fallback 还需检查 `CODEX_HOME` 和最新 rate-limit 数据。请参考 [docs/troubleshooting.md](docs/troubleshooting.md)。

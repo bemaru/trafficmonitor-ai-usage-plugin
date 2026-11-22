@@ -25,6 +25,7 @@ public:
     static CCodexUsageData& Instance();
 
     void RefreshIfNeeded();
+    void AutoStartBundledHelperIfNeeded();
     const std::wstring& GetValueText(CodexUsageWindow window) const;
     const Metric& GetMetric(CodexUsageWindow window) const;
     const std::wstring& GetTooltipText() const;
@@ -39,6 +40,7 @@ public:
         std::wstring tooltip_text{ L"Codex usage limits unavailable" };
         std::wstring error_text;
         std::wstring source_text;
+        long long web_updated_at_unix_seconds{};
     };
 
 private:
@@ -46,6 +48,7 @@ private:
 
     bool Refresh();
     static bool LoadFromStore(Snapshot& snapshot);
+    static bool LoadFromWebHelper(Snapshot& snapshot);
     static bool LoadFromSessionJsonlStore(const std::wstring& store_dir, Snapshot& snapshot);
     static void FinalizeSnapshot(Snapshot& snapshot);
     static bool HasAvailableMetric(const Snapshot& snapshot);
@@ -56,6 +59,7 @@ private:
     unsigned long long m_last_refresh_tick{};
     bool m_last_refresh_succeeded{};
     bool m_refresh_in_progress{};
+    bool m_helper_auto_start_attempted{};
 };
 
 #define g_codex_usage_data CCodexUsageData::Instance()

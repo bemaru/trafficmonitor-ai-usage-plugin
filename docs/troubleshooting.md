@@ -9,6 +9,7 @@ After installation or setup, check the following:
 3. The taskbar items show used percentages instead of `--`
 4. The tooltip shows used percentages and reset timing for any source that exposes reset metadata
 5. If Claude helper is enabled, `%LOCALAPPDATA%\trafficmonitor-claude-usage-plugin\claude-web-usage.json` updates after a successful helper fetch
+6. If Codex web helper is enabled, `codex-web-helper.ps1 status` reports a recent successful snapshot
 
 ## Common Issues
 
@@ -48,7 +49,29 @@ Verify that the helper is updating `%LOCALAPPDATA%\trafficmonitor-claude-usage-p
 
 ### Codex usage does not appear
 
-Check these first:
+Check the independent helper first:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\plugins\ClaudeUsagePlugin\codex-web-helper.ps1 status
+powershell -ExecutionPolicy Bypass -File .\plugins\ClaudeUsagePlugin\codex-web-helper.ps1 once
+```
+
+Run `login` again if the dedicated session expired. Complete sign-in directly
+in the Chrome window, close it, then run `start`. A missing Chrome install,
+profile still in use, access denial, challenge, HTTP failure, or changed
+response shape prevents a web snapshot from being used. The helper records
+only sanitized state; do not paste authorization headers or session responses
+into a bug report.
+
+After the one-time login, restarting TrafficMonitor also starts the bundled
+Codex watcher automatically. If `login` says the watcher is running, run
+`stop` first. A watcher stopped manually remains stopped in the current
+plugin instance; use `start` to resume immediately or reload the plugin.
+The plugin attempts startup once per load and skips it before the dedicated
+Chrome profile has been initialized. No scheduled task or extra Windows
+startup entry is needed.
+
+When using the optional local JSONL fallback, check:
 
 - `CODEX_HOME` or `%USERPROFILE%\.codex` resolves from the Windows TrafficMonitor process
 - The resolved path is Windows-readable
@@ -59,7 +82,10 @@ Check these first:
 
 TrafficMonitor now standardizes Codex on used percentage in both the widget and tooltip.
 If the Codex usage page is showing remaining percentage for the same window, the two numbers should add up to about 100%.
-If the numbers are not simple inverses, verify that `%USERPROFILE%\.codex\sessions\**\*.jsonl` is being updated and that `CODEX_HOME` points at the same Codex profile the dashboard is using.
+If the numbers are not simple inverses, check that the dedicated Codex helper
+login uses the same ChatGPT account and workspace as the dashboard. If the
+plugin has fallen back to JSONL, verify that those session files are being
+updated and that `CODEX_HOME` points at the intended Codex profile.
 
 ### Codex values jump between different weekly reset times
 
@@ -77,8 +103,25 @@ Verify `CODEX_HOME`, Windows path visibility, and that Codex has started at leas
 
 ### `Codex sessions JSONL returned no rate limits`
 
-Codex local session logs were found, but no rate-limit payload was present yet.
-The plugin does not fall back to another local store, so Codex stays unavailable until a session JSONL entry includes rate-limit data.
+Codex local session logs were found, but no usable rate-limit payload was
+present. Use the independent Codex helper or wait for a session JSONL entry
+with current rate-limit data. There is no other local-store fallback.
+
+### Codex web values disappear after an error
+
+This is intentional: a failed helper refresh removes the previous web snapshot.
+Snapshots older than 180 seconds and windows past their reset time are also
+rejected. The plugin uses usable JSONL data or displays `--`. Repeat `login`
+for an expired session; use `status` to inspect failures. For a challenge,
+open the dedicated interactive login window and complete the site's normal
+verification before closing it and restarting the watcher.
+
+### Codex helper reports that the profile is in use
+
+Close the Chrome window opened by `codex-web-helper.ps1 login`. Do not run
+multiple `once`/`watch` processes against the same dedicated profile. Run
+`stop` before changing helper modes. The helper must not attach to the normal
+Chrome profile or use a remotely exposed debugging port.
 
 ### Plug-in loads but the items do not appear
 
@@ -92,7 +135,8 @@ This is usually one of these:
 - The Claude web helper depends on an interactive Claude web login stored in its dedicated local Chromium profile
 - Claude values depend on a fresh helper snapshot
 - The Claude web helper is not a separate installer or Windows service; it is shipped as bundled files under `plugins\ClaudeUsagePlugin`
-- Codex usage comes from local Codex session JSONL files, not an official OpenAI usage API
+- Codex web usage depends on a dedicated interactive ChatGPT login and private web endpoints, which may change
+- Codex helper requires Google Chrome and Node.js 22+; no Codex CLI session or copied token is required
 - There is no SQLite fallback for Codex usage
-- Codex values update only after Codex itself writes fresh local rate-limit data into session JSONL files
+- JSONL fallback values update only after Codex writes fresh local rate-limit data into session JSONL files
 - This is a best-effort integration surface, not an official Anthropic or OpenAI plugin
