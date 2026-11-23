@@ -182,6 +182,17 @@ existing installation byte for byte. The source carries forward the local
 process-identity lock improvements and conditional `System.Security` assembly
 load required by Windows PowerShell 5.1.
 
+Compatibility was rechecked on 2026-11-24 after merging upstream changes
+through `b6dfeac` (v0.3.13). The JSONL `window_minutes` classification and
+active-file selection from #12 and the Claude watch-lock hardening from #13
+remain intact. Both full release solution builds completed without warnings
+or errors, the five upstream DLL classification scenarios passed on each
+architecture, and all four upstream Claude watch-lock checks passed. The
+24 Node/DPAPI tests and 87 reader plus 40 automatic-start checks per
+architecture also passed again. The classification fixtures now isolate
+`LOCALAPPDATA` and `USERPROFILE` as well as `CODEX_HOME` so a real web cache
+cannot override their synthetic JSONL data.
+
 This live result validates the session-to-Bearer flow for the
 tested dedicated login; it does not establish behavior for all account plans,
 workspaces, or future endpoint versions.

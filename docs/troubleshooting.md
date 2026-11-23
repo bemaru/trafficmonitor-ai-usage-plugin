@@ -37,6 +37,18 @@ powershell -ExecutionPolicy Bypass -File .\plugins\ClaudeUsagePlugin\claude-web-
 Close the helper browser window that was opened by `login`, then run `start` again.
 Use `watch` only for foreground troubleshooting.
 
+### Claude helper reports an old watcher after Windows restarts
+
+Plugin `v0.3.13` and newer validates the process behind
+`claude-web-helper-watch.lock` by name, command line, and start time. If Windows
+reused the recorded PID for another process, `status` or `start` removes the
+stale lock without terminating that unrelated process.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\plugins\ClaudeUsagePlugin\claude-web-helper.ps1 status
+powershell -ExecutionPolicy Bypass -File .\plugins\ClaudeUsagePlugin\claude-web-helper.ps1 start
+```
+
 ### Claude helper status shows `rate_limited` or `request_failed`
 
 The helper could not fetch `claude.ai` usage right now.
@@ -86,6 +98,16 @@ If the numbers are not simple inverses, check that the dedicated Codex helper
 login uses the same ChatGPT account and workspace as the dashboard. If the
 plugin has fallen back to JSONL, verify that those session files are being
 updated and that `CODEX_HOME` points at the intended Codex profile.
+
+### A weekly Codex limit appears under `X5h`
+
+Current Codex payloads can place a seven-day limit in `primary` instead of `secondary`.
+Plugin `v0.3.12` and newer classify limits by their reported duration:
+
+- `300` minutes is displayed as `X5h`
+- `10080` minutes is displayed as `X7d`
+
+If a current payload is still shown under the wrong label, verify that TrafficMonitor loaded `v0.3.12` or newer and restart TrafficMonitor after replacing the DLL.
 
 ### Codex values jump between different weekly reset times
 

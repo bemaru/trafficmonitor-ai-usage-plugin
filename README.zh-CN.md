@@ -34,8 +34,8 @@
    - 解压到任意目录，然后运行 `TrafficMonitor.exe`。
    - 如果不需要温度监控，通常 Lite 包就够用。
 2. 从 [latest release](https://github.com/bemaru/trafficmonitor-ai-usage-plugin/releases/latest) 下载与已安装 TrafficMonitor 架构匹配的插件 zip。
-   - `x64` TrafficMonitor 使用 `TrafficMonitorAIUsageLimits_v0.3.11_x64.zip`
-   - `x86` TrafficMonitor 使用 `TrafficMonitorAIUsageLimits_v0.3.11_x86.zip`
+   - `x64` TrafficMonitor 使用 `TrafficMonitorAIUsageLimits_v0.3.13_x64.zip`
+   - `x86` TrafficMonitor 使用 `TrafficMonitorAIUsageLimits_v0.3.13_x86.zip`
 3. 将 zip 解压到包含 `TrafficMonitor.exe` 的 TrafficMonitor 文件夹中。
    解压后的结构应如下所示。
 
@@ -79,7 +79,7 @@ watcher；重新加载插件后会自动启动。无需 Codex CLI 会话或手�
 如果使用 JSONL fallback
 且 Codex 状态不在 `%USERPROFILE%\.codex` 下，请设置 `CODEX_HOME`。
 
-Codex helper 包含在此源码的构建结果中；现有 v0.3.11 发布包不包含它，
+Codex helper 包含在此源码的构建结果中；截至 v0.3.13 的现有发布包不包含它，
 请使用本地构建体验此功能。
 
 如果 helper 文件保留在 `plugins\ClaudeUsagePlugin` 下，插件加载时会自动启动
@@ -111,6 +111,9 @@ Codex 专用 Chrome profile 尚未通过登录初始化时会跳过自动启动�
 - Codex helper 使用专用 Chrome profile，每 60 秒刷新，session token 仅在浏览器内存中使用。
 - web 数据不可用时，fallback 到 `%USERPROFILE%\.codex\sessions\**\*.jsonl`；没有 `logs_2.sqlite` fallback。
 - web 请求失败会删除旧 snapshot；已过重置时间的窗口不再显示旧值。
+- JSONL fallback 按 `window_minutes` 区分限额：`300` 显示为 `X5h`，`10080` 显示为 `X7d`；即使只有七天限额且位于 `primary`，也会正确显示为 `X7d`。
+- 缺少 `window_minutes` 的 JSONL payload 保留旧的 `primary` / `secondary` 映射；刷新时读取最新的活跃 session 文件区间。
+- 如果既没有最新 web 数据，也没有可用的 JSONL rate-limit payload，Codex 会显示 unavailable。
 - Codex 本地 payload 可能提供 `used_percent` 或 `remaining_percent`，remaining 值会被转换为 used percentage。
 - 当 `CODEX_HOME` 指向 Windows 可读取的位置时，会覆盖默认 Codex 路径。
 - TrafficMonitor 运行在 Windows 上，因此无法读取 `/home/<user>/.codex` 这类 Linux-only 路径。

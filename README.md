@@ -34,8 +34,8 @@ The plugin puts Claude and Codex usage limits in that fixed taskbar location, in
    - Extract it anywhere you want, then run `TrafficMonitor.exe`
    - If you do not need temperature monitoring, the Lite package is usually enough
 2. Download the plugin zip that matches the installed TrafficMonitor build from the [latest release](https://github.com/bemaru/trafficmonitor-ai-usage-plugin/releases/latest):
-   - `TrafficMonitorAIUsageLimits_v0.3.11_x64.zip` for `x64` TrafficMonitor
-   - `TrafficMonitorAIUsageLimits_v0.3.11_x86.zip` for `x86` TrafficMonitor
+   - `TrafficMonitorAIUsageLimits_v0.3.13_x64.zip` for `x64` TrafficMonitor
+   - `TrafficMonitorAIUsageLimits_v0.3.13_x86.zip` for `x86` TrafficMonitor
 3. Extract the zip into the TrafficMonitor folder, the folder that contains `TrafficMonitor.exe`.
    After extraction, the layout should look like this:
 
@@ -83,8 +83,8 @@ reloaded. Codex CLI sessions and manually copied tokens are not required.
 For the optional JSONL fallback, set `CODEX_HOME` if your Codex state is not
 stored in `%USERPROFILE%\.codex`.
 
-The Codex helper is included in builds from this source. Existing v0.3.11
-release archives predate it; use your local build for this feature.
+The Codex helper is included in builds from this source. Published releases
+through v0.3.13 predate it; use your local build for this feature.
 
 If the helper files stay under `plugins\ClaudeUsagePlugin`, the bundled
 Claude and Codex watchers auto-start on plugin load. Each plugin instance
@@ -115,6 +115,9 @@ For the full screenshot walkthrough, see [docs/install.md](docs/install.md).
 - The Codex helper uses a dedicated Chrome profile, keeps session tokens inside browser memory, and refreshes every 60 seconds
 - If web data is unavailable, Codex falls back to local `%USERPROFILE%\.codex\sessions\**\*.jsonl`; there is no `logs_2.sqlite` fallback
 - Failed web fetches remove the previous snapshot; expired windows are unavailable rather than displaying stale values
+- JSONL fallback limits are assigned by `window_minutes`: `300` maps to `X5h` and `10080` to `X7d`, even when a seven-day-only payload is delivered as `primary`
+- JSONL payloads without `window_minutes` retain the legacy `primary` / `secondary` mapping; refresh reads the newest active session-file window
+- If neither fresh web data nor usable JSONL rate-limit payloads are available, Codex shows unavailable
 - Codex local payloads can expose either `used_percent` or `remaining_percent`; remaining values are converted to used percentage before display
 - `CODEX_HOME` overrides the default Codex path when it resolves to a Windows-readable location
 - TrafficMonitor runs on Windows, so Linux-only paths such as `/home/<user>/.codex` are not readable

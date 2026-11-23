@@ -23,6 +23,15 @@ For `Win32`:
 MSBuild.exe .\ClaudeUsagePlugin.sln /t:ClaudeUsagePlugin /p:Configuration=Release /p:Platform=Win32
 ```
 
+Run the helper watch-lock regression test:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-claude-web-helper-watch-lock.ps1
+```
+
+The test confirms that a stale lock cannot cause an unrelated reused PID to be
+treated as, or terminated as, the helper watcher.
+
 ## Build Output
 
 - `build\x64\Release\plugins\ClaudeUsagePlugin.dll`

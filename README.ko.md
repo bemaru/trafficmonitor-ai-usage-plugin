@@ -34,8 +34,8 @@ Windows에서 이런 AI 사용량 한도를 편하게 볼 수 있는 적절한 �
    - 원하는 위치에 압축을 풀고 `TrafficMonitor.exe`를 실행합니다.
    - 온도 모니터링이 필요 없다면 보통 Lite 패키지로 충분합니다.
 2. [최신 릴리스](https://github.com/bemaru/trafficmonitor-ai-usage-plugin/releases/latest)에서 설치한 TrafficMonitor와 같은 아키텍처의 플러그인 zip을 다운로드합니다.
-   - `x64` TrafficMonitor에는 `TrafficMonitorAIUsageLimits_v0.3.11_x64.zip`
-   - `x86` TrafficMonitor에는 `TrafficMonitorAIUsageLimits_v0.3.11_x86.zip`
+   - `x64` TrafficMonitor에는 `TrafficMonitorAIUsageLimits_v0.3.13_x64.zip`
+   - `x86` TrafficMonitor에는 `TrafficMonitorAIUsageLimits_v0.3.13_x86.zip`
 3. zip 파일을 `TrafficMonitor.exe`가 있는 TrafficMonitor 폴더에 압축 해제합니다.
    압축 해제 후 구조는 다음과 같아야 합니다.
 
@@ -82,8 +82,8 @@ Codex CLI 세션이나 수동 토큰 복사는 필요하지 않습니다.
 선택적인 JSONL fallback을 사용할 때 Codex 상태가
 `%USERPROFILE%\.codex` 이외의 경로에 있다면 `CODEX_HOME`을 설정합니다.
 
-Codex helper는 이 소스에서 빌드한 결과물에 포함됩니다. 기존 v0.3.11 릴리스
-압축 파일에는 없으므로 이 기능은 로컬 빌드로 사용하세요.
+Codex helper는 이 소스에서 빌드한 결과물에 포함됩니다. v0.3.13까지의 기존
+릴리스 압축 파일에는 없으므로 이 기능은 로컬 빌드로 사용하세요.
 
 helper 파일이 `plugins\ClaudeUsagePlugin` 아래에 있으면 플러그인 로드 시
 Claude와 Codex watcher가 자동으로 시작됩니다. 플러그인 인스턴스마다 한 번
@@ -113,6 +113,9 @@ Codex는 전용 Chrome 프로필이 로그인으로 초기화되기 전에는 �
 - Codex helper는 전용 Chrome 프로필에서 60초마다 갱신하며 세션 토큰은 브라우저 메모리 안에서만 사용합니다.
 - web 데이터를 사용할 수 없으면 `%USERPROFILE%\.codex\sessions\**\*.jsonl`을 fallback으로 읽습니다. `logs_2.sqlite` fallback은 없습니다.
 - web 조회가 실패하면 이전 snapshot을 삭제하며, 초기화 시각이 지난 구간은 오래된 값을 표시하지 않고 unavailable로 처리합니다.
+- JSONL fallback 한도는 `window_minutes`로 구분하여 `300`은 `X5h`, `10080`은 `X7d`에 표시합니다. 7일 한도만 `primary`로 전달되어도 `X7d`로 분류합니다.
+- `window_minutes`가 없는 JSONL payload는 기존 `primary` / `secondary` 매핑을 유지하며, 갱신할 때 가장 최근 활성 session 파일 구간을 읽습니다.
+- 최신 web 데이터와 사용 가능한 JSONL rate-limit payload가 모두 없으면 Codex는 unavailable로 표시됩니다.
 - Codex 로컬 payload는 `used_percent` 또는 `remaining_percent`를 제공할 수 있으며, 남은 값은 사용률로 변환됩니다.
 - `CODEX_HOME`은 Windows에서 읽을 수 있는 경로일 때 기본 Codex 경로를 대체합니다.
 - TrafficMonitor는 Windows에서 실행되므로 `/home/<user>/.codex` 같은 Linux 전용 경로는 읽을 수 없습니다.

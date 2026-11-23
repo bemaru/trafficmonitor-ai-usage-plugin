@@ -15,6 +15,8 @@ Codex usage limits:
 - Shows unavailable when neither source provides a usable window, including windows whose reset timestamp has passed
 - Displays the used percentage for Codex in both the widget and tooltip
 - Converts local `remaining_percent` payloads to used percentage before display when needed
+- Classifies a `300` minute window as `X5h` and a `10080` minute window as `X7d`, regardless of whether the payload places it in `primary` or `secondary`
+- Uses the legacy `primary` / `secondary` mapping only when `window_minutes` is absent
 - Respects `CODEX_HOME` when it resolves to a Windows-readable path, including WSL-style `/mnt/c/...` paths
 
 ## `CODEX_HOME` Notes
@@ -59,6 +61,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 start
 - Launches the background refresh loop as a hidden background process
 - This is the normal steady-state mode after the one-time login
 - If a watcher is already running, it prints the current watcher PID instead of starting a duplicate
+- A persisted watch lock is accepted only when its PID still belongs to a matching Node `index.mjs watch` process with the same start time
+- `stop` terminates only that validated watcher; a reused PID owned by another process is never terminated
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\claude-web-helper.ps1 status
