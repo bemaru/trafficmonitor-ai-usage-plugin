@@ -157,6 +157,9 @@ export async function fetchUsageSnapshot(profileDir) {
   if (isProfileInUse(profileDir)) throw new HelperError('profile_in_use');
   await fsp.mkdir(profileDir, { recursive: true });
   const child = spawn(executable, [
+    // Elevated Chrome can relaunch without its inherited CDP pipes on Windows.
+    // Chrome's automation mode preserves the original child process and pipes.
+    ...(process.platform === 'win32' ? ['--enable-automation'] : []),
     `--user-data-dir=${profileDir}`, '--headless=new', '--remote-debugging-pipe',
     '--no-first-run', '--no-default-browser-check', '--disable-background-mode', 'about:blank',
   ], { windowsHide: true, stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'] });
