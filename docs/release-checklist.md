@@ -23,6 +23,9 @@ The owner decides when the repository or release becomes public. Do not create p
    - `ClaudeUsagePlugin.dll`
    - `ClaudeUsagePlugin\claude-web-helper.ps1`
    - `ClaudeUsagePlugin\helper\claude-web-helper\...`
+   - `ClaudeUsagePlugin\codex-web-helper.ps1`
+   - `ClaudeUsagePlugin\helper\codex-web-helper\*.mjs` (excluding tests) and `package*.json`
+   - No browser profile, credentials, runtime snapshots, watch locks, or `test-data`
 8. Confirm the release zip includes `LICENSE`, `NOTICE.md`, and `PRIVACY.md`
    at the zip root.
 
@@ -44,9 +47,14 @@ plugins
 ├─ ClaudeUsagePlugin.dll
 └─ ClaudeUsagePlugin
    ├─ claude-web-helper.ps1
+   ├─ codex-web-helper.ps1
    └─ helper
-      └─ claude-web-helper
-         ├─ index.mjs
+      ├─ claude-web-helper
+      │  ├─ index.mjs
+      │  ├─ package.json
+      │  └─ package-lock.json
+      └─ codex-web-helper
+         ├─ *.mjs
          ├─ package.json
          └─ package-lock.json
 ```
@@ -70,3 +78,5 @@ same version.
 3. Confirm `Claude 5h`, `Claude 7d`, `Codex 5h`, and `Codex 7d` appear in display settings.
 4. Confirm the tooltip shows localized reset times.
 5. Confirm Claude becomes unavailable if the helper snapshot is stale instead of showing stale values forever.
+6. Verify a dedicated Codex login, authenticated session access, Bearer usage request, both usage windows, and reset timestamps. Record only sanitized results in [codex-web-helper-investigation.md](codex-web-helper-investigation.md).
+7. Confirm Codex web refresh failures remove its snapshot, stale snapshots are rejected, and usable JSONL data remains available as a fallback.

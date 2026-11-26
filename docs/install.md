@@ -34,12 +34,20 @@ TrafficMonitor
    ├─ ClaudeUsagePlugin.dll
    └─ ClaudeUsagePlugin
       ├─ claude-web-helper.ps1
+      ├─ codex-web-helper.ps1
       └─ helper
-         └─ claude-web-helper
-            ├─ index.mjs
+         ├─ claude-web-helper
+         │  ├─ index.mjs
+         │  ├─ package.json
+         │  └─ package-lock.json
+         └─ codex-web-helper
+            ├─ *.mjs
             ├─ package.json
             └─ package-lock.json
 ```
+
+The Codex helper is part of builds from the current source; existing v0.3.11
+release archives do not contain it. Build locally to use the new helper.
 
 ## 3. Restart TrafficMonitor
 
@@ -94,9 +102,38 @@ powershell -ExecutionPolicy Bypass -File .\plugins\ClaudeUsagePlugin\claude-web-
 
 That opens a browser window with the helper's dedicated profile. Sign in to Claude there, then close that helper browser window.
 
-## 7. Codex path override
+## 7. Codex one-time login
+
+Install Google Chrome and Node.js 22 or newer, then run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\plugins\ClaudeUsagePlugin\codex-web-helper.ps1 login
+```
+
+Sign in directly in the dedicated Chrome window using the ChatGPT account
+and workspace you want to monitor. Close that window and restart
+TrafficMonitor. When the plugin loads, it automatically starts the hidden
+60-second Codex refresh loop using the saved login. Check its state with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\plugins\ClaudeUsagePlugin\codex-web-helper.ps1 status
+```
+
+You do not need Codex CLI sessions, API keys, or manually copied tokens. Use
+`start` to resume manually without restarting TrafficMonitor, `once` for a
+single refresh, and `stop` to stop the Codex watcher. If it is already running
+when you need to log in again, run `stop` before `login`. The login is stored
+by Chrome in its dedicated profile for subsequent starts.
+
+Codex automatic startup is skipped until its dedicated Chrome profile has
+been initialized. The plugin tries startup once per load, so `stop` keeps it
+stopped for the current plugin instance; reloading the plugin starts it again.
+This creates no scheduled task, Windows service, or extra Windows startup entry.
+
+## 8. Optional Codex JSONL path override
 
 If your Codex state does not live in `%USERPROFILE%\.codex`, set `CODEX_HOME` in the Windows environment before launching TrafficMonitor.
+This affects only the JSONL fallback; fresh web usage has priority.
 
 ## Recommended TrafficMonitor settings
 

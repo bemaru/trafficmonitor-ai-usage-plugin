@@ -11,6 +11,37 @@ namespace
 {
 using GetPluginInstance = ITMPlugin* (*)();
 
+class ScopedEnvironmentVariable
+{
+public:
+    explicit ScopedEnvironmentVariable(const wchar_t* name) : m_name(name)
+    {
+        const DWORD length = GetEnvironmentVariableW(name, nullptr, 0);
+        m_was_set = length != 0;
+        if (m_was_set)
+        {
+            m_original_value.resize(length, L'\0');
+            const DWORD copied = GetEnvironmentVariableW(name, &m_original_value[0], length);
+            m_original_value.resize(copied);
+        }
+    }
+
+    ~ScopedEnvironmentVariable()
+    {
+        SetEnvironmentVariableW(m_name, m_was_set ? m_original_value.c_str() : nullptr);
+    }
+
+    bool Set(const std::filesystem::path& value) const
+    {
+        return SetEnvironmentVariableW(m_name, value.c_str()) != FALSE;
+    }
+
+private:
+    const wchar_t* m_name;
+    std::wstring m_original_value;
+    bool m_was_set{};
+};
+
 struct TestCase
 {
     const wchar_t* name;
@@ -112,9 +143,20 @@ int wmain(int argc, wchar_t* argv[])
     }
 
     const std::filesystem::path fixture_root = CreateFixture(*test_case);
-    if (!SetEnvironmentVariableW(L"CODEX_HOME", fixture_root.c_str()))
+    const std::filesystem::path local_app_data = fixture_root / L"local-app-data";
+    const std::filesystem::path user_profile = fixture_root / L"user-profile";
+    std::filesystem::create_directories(local_app_data);
+    std::filesystem::create_directories(user_profile);
+    ScopedEnvironmentVariable codex_home_env(L"CODEX_HOME");
+    ScopedEnvironmentVariable local_app_data_env(L"LOCALAPPDATA");
+    ScopedEnvironmentVariable user_profile_env(L"USERPROFILE");
+    // These scenarios test JSONL classification. Isolate all helper-cache paths
+    // so a fresh web snapshot from the user's real profile cannot take priority.
+    if (!codex_home_env.Set(fixture_root) || !local_app_data_env.Set(local_app_data) ||
+        !user_profile_env.Set(user_profile))
     {
-        std::wcerr << L"Failed to set CODEX_HOME.\n";
+        std::wcerr << L"Failed to isolate the test environment.\n";
+        std::filesystem::remove_all(fixture_root);
         return 2;
     }
 

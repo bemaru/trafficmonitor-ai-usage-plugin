@@ -286,6 +286,7 @@ function getMasterKey() {
 
   const dpapiPayload = encryptedKey.subarray(5);
   const pwshScript =
+    `if ($PSVersionTable.PSEdition -eq 'Desktop') { Add-Type -AssemblyName System.Security }; ` +
     `[Convert]::ToBase64String(` +
     `[System.Security.Cryptography.ProtectedData]::Unprotect(` +
     `[Convert]::FromBase64String('${dpapiPayload.toString('base64')}'), ` +

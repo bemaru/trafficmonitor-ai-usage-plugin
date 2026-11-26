@@ -25,11 +25,12 @@ inside TrafficMonitor.
 
 - The plugin still deploys as `ClaudeUsagePlugin.dll` for compatibility with TrafficMonitor's plugin layout.
 - Claude needs a one-time helper login through `claude-web-helper.ps1 login`.
-- Codex reads local state from `%USERPROFILE%\.codex` unless `CODEX_HOME` is set.
+- Codex web usage uses a one-time dedicated Chrome login through `codex-web-helper.ps1 login`, then `start`.
+- Codex JSONL fallback reads `%USERPROFILE%\.codex` unless `CODEX_HOME` is set.
 
 ## Known Constraints
 
 - Claude values require a fresh helper snapshot.
-- Codex values update only after Codex writes fresh local rate-limit data.
+- Codex web values refresh every 60 seconds while its watcher runs; JSONL fallback updates after Codex writes local rate-limit data.
 - This is a best-effort integration surface, not an official Anthropic or OpenAI plugin.
 - Review the repository license, notices, and privacy disclosure before making a public release.

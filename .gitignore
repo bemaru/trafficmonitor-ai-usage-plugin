@@ -38,3 +38,5 @@ Desktop.ini
 
 # Helper dependencies
 helper/claude-web-helper/node_modules/
+helper/codex-web-helper/node_modules/
+test-data/

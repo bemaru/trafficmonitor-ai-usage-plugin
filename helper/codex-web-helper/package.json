@@ -1,0 +1,15 @@
+{
+  "name": "trafficmonitor-codex-web-helper",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Independent Codex web session helper for ClaudeUsagePlugin",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "login": "node index.mjs login",
+    "once": "node index.mjs once",
+    "watch": "node index.mjs watch",
+    "status": "node index.mjs status",
+    "test": "node --test"
+  }
+}

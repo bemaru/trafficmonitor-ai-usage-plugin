@@ -323,6 +323,7 @@ void CClaudeUsagePlugin::OnInitialize(ITrafficMonitor* pApp)
 {
     (void)pApp;
     g_claude_usage_data.AutoStartBundledHelperIfNeeded();
+    g_codex_usage_data.AutoStartBundledHelperIfNeeded();
 }
 
 void CClaudeUsagePlugin::DataRequired()
